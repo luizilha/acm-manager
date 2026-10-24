@@ -32,6 +32,7 @@ _EN: dict[str, str] = {
     "Assetto Corsa": "Assetto Corsa",
     "Proton": "Proton",
     "CSP": "CSP",
+    "Distro": "Distro",
     "Fontes": "Fonts",
     "dwrite": "dwrite",
     "protontricks": "protontricks",
@@ -40,6 +41,9 @@ _EN: dict[str, str] = {
     "Instalar/atualizar CSP": "Install/update CSP",
     "Instalar Proton-GE 9-20": "Install Proton-GE 9-20",
     "Instalar fontes": "Install fonts",
+    "Instalar dependências": "Install dependencies",
+    "Instalar unrar, 7z, bsdtar e cabextract usando o gerenciador da sua distro?":
+        "Install unrar, 7z, bsdtar and cabextract using your distro package manager?",
     "Atualizar status": "Refresh status",
     "Abrir pasta do AC": "Open AC folder",
     "Configuração pendente. O assistente instala Proton-GE 9-20, CSP, fontes e protontricks.":
@@ -280,6 +284,9 @@ _EN: dict[str, str] = {
     "Instalar/atualizar CSP": "Install/update CSP",
     "Instalar Proton-GE": "Install Proton-GE",
     "Instalar fontes": "Install fonts",
+    "Instalar dependências": "Install dependencies",
+    "Instalar unrar, 7z, bsdtar e cabextract usando o gerenciador da sua distro?":
+        "Install unrar, 7z, bsdtar and cabextract using your distro package manager?",
 }
 
 _language = "pt"

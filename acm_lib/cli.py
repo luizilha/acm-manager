@@ -39,6 +39,8 @@ from .setup import *
 
 def cmd_detect(_args) -> int:
     steam = detect_steam()
+    distro = detect_distro()
+    print(f"Distro: {distro.label()}")
     if not steam:
         print("[x] Steam não encontrada (nem Flatpak, nem nativa).")
         return 1
@@ -70,6 +72,10 @@ def cmd_detect(_args) -> int:
 
 def cmd_status(_args) -> int:
     return cmd_detect(_args)
+
+def cmd_setup_deps(args) -> int:
+    return install_system_deps(args.yes, args.dry_run)
+
 
 def cmd_install_csp(args) -> int:
     return install_csp_version(args.version, args.dry_run, args.yes, not args.no_fonts)
@@ -243,6 +249,11 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("detect", help="Detecta Steam/AC/prefixo/Proton/CSP").set_defaults(func=cmd_detect)
     sub.add_parser("status", help="Alias de detect").set_defaults(func=cmd_status)
+
+    q = sub.add_parser("setup-deps", help="Instala unrar/7z/bsdtar/cabextract conforme a distro")
+    q.add_argument("--yes", action="store_true")
+    q.add_argument("--dry-run", action="store_true")
+    q.set_defaults(func=cmd_setup_deps)
 
     q = sub.add_parser("install-csp", help="Baixa e instala o Custom Shaders Patch")
     q.add_argument("--version", help="Versão do CSP (padrão: última)")

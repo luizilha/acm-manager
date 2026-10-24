@@ -71,6 +71,7 @@ CATALOG_CACHE = CACHE / "tracks-catalog.json"
 CATALOG_TTL = 7 * 24 * 3600
 
 __all__ = [
+    "DistroInfo", "detect_distro", "distro_install_command",
     "APP_ID", "AC_DIR_NAME", "UA", "ARCHIVE_EXTS", "CSP_URL", "CSP_PAGE",
     "GE_PROTON_DEFAULT", "GE_API", "FONTS_URL", "SERVER_LIST_URL",
     "SERVER_LIST_UA", "SERVERS_TTL", "CACHE", "STATE", "BACKUPS",
@@ -239,6 +240,70 @@ class AcInstall:
             "dwrite_override": self.dwrite_override,
             "protontricks": self.protontricks_kind,
         }
+
+@dataclass
+class DistroInfo:
+    id: str
+    name: str
+    family: str  # arch | debian | fedora | unknown
+    package_manager: str | None
+
+    def label(self) -> str:
+        if self.package_manager:
+            return f"{self.name} ({self.package_manager})"
+        return self.name
+
+
+def detect_distro() -> DistroInfo:
+    """Detecta a família da distro para adaptar pacotes de sistema."""
+    data: dict[str, str] = {}
+    os_release = Path("/etc/os-release")
+    if os_release.exists():
+        for line in os_release.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            data[key.strip()] = value.strip().strip('"').strip("'")
+    raw_id = (data.get("ID") or "").lower()
+    like = (data.get("ID_LIKE") or "").lower().split()
+    name = data.get("PRETTY_NAME") or data.get("NAME") or raw_id or "Linux"
+
+    arch_ids = {"arch", "archlinux", "cachyos", "manjaro", "endeavouros", "garuda", "artix"}
+    debian_ids = {"debian", "ubuntu", "linuxmint", "pop", "elementary", "zorin", "kali"}
+    fedora_ids = {"fedora", "rhel", "centos", "rocky", "almalinux", "nobara", "bazzite"}
+
+    if raw_id in arch_ids or any(item in arch_ids or item == "arch" for item in like):
+        family = "arch"
+    elif raw_id in debian_ids or any(item in debian_ids or item == "debian" for item in like):
+        family = "debian"
+    elif raw_id in fedora_ids or any(item in fedora_ids or item in {"fedora", "rhel"} for item in like):
+        family = "fedora"
+    else:
+        family = "unknown"
+
+    package_manager = None
+    for candidate, candidate_family in (("pacman", "arch"), ("apt-get", "debian"), ("dnf", "fedora")):
+        if family == candidate_family and shutil.which(candidate):
+            package_manager = candidate
+            break
+    if package_manager is None:
+        for candidate in ("pacman", "apt-get", "dnf"):
+            if shutil.which(candidate):
+                package_manager = candidate
+                family = {"pacman": "arch", "apt-get": "debian", "dnf": "fedora"}[candidate]
+                break
+    return DistroInfo(raw_id or "unknown", name, family, package_manager)
+
+
+def distro_install_command(distro: DistroInfo, packages: list[str]) -> list[str]:
+    if distro.family == "arch" and distro.package_manager == "pacman":
+        return ["sudo", "pacman", "-S", "--needed", *packages]
+    if distro.family == "debian" and distro.package_manager == "apt-get":
+        return ["sudo", "apt-get", "install", "-y", *packages]
+    if distro.family == "fedora" and distro.package_manager == "dnf":
+        return ["sudo", "dnf", "install", "-y", *packages]
+    return []
+
 
 def _flatpak_steam_roots() -> list[Path]:
     base = Path.home() / ".var" / "app" / "com.valvesoftware.Steam"

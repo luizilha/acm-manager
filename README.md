@@ -14,6 +14,7 @@ O script já embute todas as correções descobertas na prática:
 - `dwrite=native,builtin` no prefixo
 - **fonts.zip** (Segoe UI/Verdana) em `content/fonts/system` e `C:\windows\Fonts`
 - `protontricks` (Flatpak ou host) + `corefonts`
+- **detecção de distro** (Arch/Debian/Fedora) para instalar protontricks e dependências com `pacman`, `apt` ou `dnf`; fallback Flatpak/pipx
 - manifesto e backups de tudo que altera
 
 Fluxo recomendado:
@@ -33,6 +34,7 @@ Ou passo a passo:
 
 ```bash
 python3 acm.py detect
+python3 acm.py setup-deps --yes   # unrar/7z/bsdtar/cabextract conforme a distro
 
 python3 acm.py install-proton-ge --version GE-Proton9-20 --yes
 python3 acm.py set-proton --name GE-Proton9-20 --yes   # Steam fechado
@@ -374,6 +376,7 @@ Para assettoworld (JS/verificação), use `--browser` ou passe o arquivo baixado
 - Conteúdo substituído com `--force` vai para `~/.local/share/acm/backups/<data>/`.
 - Manifestos em `~/.local/share/acm/manifests/`.
 - O script recusa rodar como root.
+- O setup detecta a distro e adapta o gerenciador de pacotes; em Debian/Ubuntu `unrar` pode exigir `non-free`, e em Fedora pode exigir RPM Fusion.
 - Feche o AC antes de instalar CSP/mods.
 
 ## Limitações conhecidas

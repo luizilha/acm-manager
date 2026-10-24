@@ -180,6 +180,78 @@ def ensure_dwrite_override(prefix: Path) -> bool:
     print("[✓] Override dwrite adicionado (backup em user.reg.acm-backup).")
     return True
 
+def _run_package_command(command: list[str]) -> int:
+    """Executa sudo no terminal ou usa pkexec quando a GUI não tem TTY."""
+    command = list(command)
+    if command and command[0] == "sudo" and hasattr(os, "geteuid") and os.geteuid() != 0:
+        if shutil.which("pkexec"):
+            command = ["pkexec", *command[1:]]
+        elif not sys.stdin or not sys.stdin.isatty():
+            eprint("[!] Sem terminal e sem pkexec; execute o comando manualmente:")
+            eprint("    " + " ".join(command))
+            return 1
+    return subprocess.run(command).returncode
+
+
+def _missing_system_tools() -> list[str]:
+    missing = []
+    if not shutil.which("unrar") and not shutil.which("unar"):
+        missing.append("unrar")
+    if not shutil.which("7z") and not shutil.which("7zz"):
+        missing.append("7z")
+    if not shutil.which("bsdtar"):
+        missing.append("bsdtar")
+    if not shutil.which("cabextract"):
+        missing.append("cabextract")
+    return missing
+
+
+def _dependency_packages(distro: DistroInfo, tools: list[str]) -> list[str]:
+    mapping = {
+        "arch": {
+            "unrar": "unrar", "7z": "p7zip",
+            "bsdtar": "libarchive", "cabextract": "cabextract",
+        },
+        "debian": {
+            "unrar": "unrar", "7z": "p7zip-full",
+            "bsdtar": "libarchive-tools", "cabextract": "cabextract",
+        },
+        "fedora": {
+            "unrar": "unrar", "7z": "p7zip-plugins",
+            "bsdtar": "bsdtar", "cabextract": "cabextract",
+        },
+    }.get(distro.family, {})
+    return [mapping[tool] for tool in tools if tool in mapping]
+
+
+def install_system_deps(assume_yes: bool, dry_run: bool = False) -> int:
+    """Instala ferramentas externas de extração/fontes para a distro atual."""
+    distro = detect_distro()
+    print(f"[i] Distro: {distro.label()}")
+    missing = _missing_system_tools()
+    if not missing:
+        print("[✓] Dependências de sistema já instaladas (unrar/7z/bsdtar/cabextract).")
+        return 0
+    packages = _dependency_packages(distro, missing)
+    if not packages:
+        eprint(f"[!] Não sei instalar {', '.join(missing)} em {distro.name}.")
+        eprint("    Instale manualmente: unrar, 7z (p7zip/7zip), bsdtar (libarchive) e cabextract.")
+        return 1
+    command = distro_install_command(distro, packages)
+    print(f"[i] Faltando: {', '.join(missing)}")
+    print("    " + " ".join(command))
+    if dry_run:
+        return 0
+    if not confirm(f"Instalar {', '.join(packages)} com {distro.package_manager}?", assume_yes):
+        return 0
+    rc = _run_package_command(command)
+    if rc != 0:
+        eprint(f"[x] O gerenciador retornou {rc}. Instale manualmente: {', '.join(packages)}")
+        return rc
+    print("[✓] Dependências de sistema instaladas.")
+    return 0
+
+
 def install_protontricks(assume_yes: bool) -> int:
     ac = detect_ac()
     if not ac:
@@ -205,14 +277,27 @@ def install_protontricks(assume_yes: bool) -> int:
         print("[✓] protontricks instalado.")
         return 0
 
-    if shutil.which("pacman"):
-        print("[i] Steam nativa + Arch: protontricks está em extra.")
-        print("    sudo pacman -S --needed protontricks")
-        if confirm("Executar o pacman agora?", assume_yes):
-            return subprocess.run(["sudo", "pacman", "-S", "--needed", "protontricks"]).returncode
-        return 0
+    distro = detect_distro()
+    print(f"[i] Steam nativa + {distro.label()}")
+    command = distro_install_command(distro, ["protontricks"])
+    if command:
+        print("    " + " ".join(command))
+        if confirm(f"Instalar protontricks com {distro.package_manager}?", assume_yes):
+            rc = _run_package_command(command)
+            if rc == 0:
+                print("[✓] protontricks instalado.")
+                return 0
+            eprint(f"[!] {distro.package_manager} retornou {rc}; tentando pipx.")
 
-    print("[i] Instale o protontricks manualmente: pipx install protontricks")
+    if shutil.which("pipx"):
+        print("    pipx install protontricks")
+        if confirm("Instalar protontricks com pipx?", assume_yes):
+            rc = subprocess.run(["pipx", "install", "protontricks"]).returncode
+            if rc == 0:
+                print("[✓] protontricks instalado via pipx.")
+                return 0
+    eprint("[!] protontricks não instalado.")
+    eprint("    Instale com o gerenciador da sua distro ou: pipx install protontricks")
     return 0
 
 def ensure_protontricks_access(ac: AcInstall) -> None:
@@ -269,8 +354,20 @@ def install_fonts(assume_yes: bool) -> int:
     # 2) corefonts via protontricks (Arial/Times/etc.)
     cmd = protontricks_cmd(ac)
     if not cmd:
-        print("[i] protontricks ausente; corefonts pulado (Segoe/Verdana já instaladas).")
+        distro = detect_distro()
+        command = distro_install_command(distro, ["protontricks"])
+        if command:
+            print("[i] protontricks ausente; corefonts pulado (Segoe/Verdana já instaladas).")
+            print("    Para instalar: " + " ".join(command))
+        else:
+            print("[i] protontricks ausente; corefonts pulado (Segoe/Verdana já instaladas).")
         return 0
+    if not shutil.which("cabextract"):
+        distro = detect_distro()
+        command = distro_install_command(distro, ["cabextract"])
+        if command:
+            print("[i] cabextract ausente; o corefonts pode falhar.")
+            print("    Para instalar: " + " ".join(command))
     ensure_protontricks_access(ac)
     print("[i] Instalando corefonts no prefixo (pode demorar)…")
     env = os.environ.copy()
@@ -420,6 +517,10 @@ def setup_all(proton_tag: str, assume_yes: bool, skip_proton: bool, skip_csp: bo
     print(f"  Fontes: fonts.zip + corefonts")
     if not assume_yes and not confirm("Aplicar esse plano?", assume_yes):
         return 0
+
+    distro = detect_distro()
+    print(f"[i] Distro detectada: {distro.label()}")
+    install_system_deps(assume_yes)
 
     if not skip_proton:
         install_proton_ge(proton_tag, assume_yes)

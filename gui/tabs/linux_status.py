@@ -61,6 +61,7 @@ class LinuxStatusTab(QWidget):
         grid.setVerticalSpacing(10)
         self.c_steam = card(i18n.tr("Steam"))
         self.c_ac = card(i18n.tr("Assetto Corsa"))
+        self.c_distro = card(i18n.tr("Distro"))
         self.c_proton = card(i18n.tr("Proton"))
         self.c_csp = card(i18n.tr("CSP"))
         self.c_fonts = card(i18n.tr("Fontes"))
@@ -68,8 +69,9 @@ class LinuxStatusTab(QWidget):
         self.c_tricks = card(i18n.tr("protontricks"))
         self.c_cache = card(i18n.tr("Cache CSP"))
         cards = [
-            self.c_steam, self.c_ac, self.c_proton, self.c_csp,
-            self.c_fonts, self.c_dwrite, self.c_tricks, self.c_cache,
+            self.c_steam, self.c_ac, self.c_distro, self.c_proton,
+            self.c_csp, self.c_fonts, self.c_dwrite, self.c_tricks,
+            self.c_cache,
         ]
         for i, (frame, _) in enumerate(cards):
             grid.addWidget(frame, i // 4, i % 4)
@@ -86,13 +88,15 @@ class LinuxStatusTab(QWidget):
         self.btn_proton.clicked.connect(self.install_proton)
         self.btn_fonts = QPushButton(i18n.tr("Instalar fontes"))
         self.btn_fonts.clicked.connect(self.install_fonts)
+        self.btn_deps = QPushButton(i18n.tr("Instalar dependências"))
+        self.btn_deps.clicked.connect(self.install_deps)
         self.btn_refresh = QPushButton(i18n.tr("Atualizar status"))
         self.btn_refresh.clicked.connect(self.refresh)
         self.btn_open = QPushButton(i18n.tr("Abrir pasta do AC"))
         self.btn_open.clicked.connect(self.open_ac_folder)
         for button in (
             self.btn_setup, self.btn_csp, self.btn_proton,
-            self.btn_fonts, self.btn_refresh, self.btn_open,
+            self.btn_fonts, self.btn_deps, self.btn_refresh, self.btn_open,
         ):
             actions.addWidget(button)
         actions.addStretch(1)
@@ -102,7 +106,7 @@ class LinuxStatusTab(QWidget):
     def set_busy(self, on: bool):
         for button in (
             self.btn_setup, self.btn_csp, self.btn_proton,
-            self.btn_fonts, self.btn_refresh, self.banner_btn,
+            self.btn_fonts, self.btn_deps, self.btn_refresh, self.banner_btn,
         ):
             button.setEnabled(not on)
 
@@ -132,6 +136,12 @@ class LinuxStatusTab(QWidget):
         self._set(self.c_dwrite, "—", None)
         self._set(self.c_tricks, "—", None)
         self._set(self.c_cache, "—", None)
+        try:
+            distro = acm.detect_distro()
+            self._set(self.c_distro, distro.label(), distro.family != "unknown")
+        except Exception as e:
+            self._set(self.c_distro, "—", None)
+            self.host.append_log(f"[x] {e}")
 
         if not steam:
             self._set(self.c_steam, i18n.tr("não encontrada"), False)
@@ -235,6 +245,15 @@ class LinuxStatusTab(QWidget):
             i18n.tr("Instalar fontes"),
             lambda: acm.install_fonts(True),
             i18n.tr("Instalar Segoe UI/Verdana e corefonts no prefixo?"),
+        )
+
+    def install_deps(self):
+        self.host.run_task(
+            i18n.tr("Instalar dependências"),
+            lambda: acm.install_system_deps(True),
+            i18n.tr(
+                "Instalar unrar, 7z, bsdtar e cabextract usando o gerenciador da sua distro?"
+            ),
         )
 
     def open_ac_folder(self):
