@@ -1,0 +1,29 @@
+# Ambiente local
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build e distribuição (o AppImage vai em Releases, não no Git)
+build/
+dist/
+AppDir/
+tools/
+*.spec
+*.AppImage
+*.AppImage.zsync
+
+# Cache, downloads, backups e lixo local
+.cache/
+.cache/*
+*.log
+*.part
+*.tmp
+.env
+.env.*
+
+# Sistema/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
