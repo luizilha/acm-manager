@@ -282,15 +282,15 @@ def detect_distro() -> DistroInfo:
         family = "unknown"
 
     package_manager = None
-    for candidate, candidate_family in (("pacman", "arch"), ("apt-get", "debian"), ("dnf", "fedora")):
+    for candidate, candidate_family in (("pacman", "arch"), ("apt-get", "debian"), ("dnf", "fedora"), ("dnf5", "fedora")):
         if family == candidate_family and shutil.which(candidate):
             package_manager = candidate
             break
     if package_manager is None:
-        for candidate in ("pacman", "apt-get", "dnf"):
+        for candidate in ("pacman", "apt-get", "dnf", "dnf5"):
             if shutil.which(candidate):
                 package_manager = candidate
-                family = {"pacman": "arch", "apt-get": "debian", "dnf": "fedora"}[candidate]
+                family = {"pacman": "arch", "apt-get": "debian", "dnf": "fedora", "dnf5": "fedora"}[candidate]
                 break
     return DistroInfo(raw_id or "unknown", name, family, package_manager)
 
@@ -300,8 +300,8 @@ def distro_install_command(distro: DistroInfo, packages: list[str]) -> list[str]
         return ["sudo", "pacman", "-S", "--needed", *packages]
     if distro.family == "debian" and distro.package_manager == "apt-get":
         return ["sudo", "apt-get", "install", "-y", *packages]
-    if distro.family == "fedora" and distro.package_manager == "dnf":
-        return ["sudo", "dnf", "install", "-y", *packages]
+    if distro.family == "fedora" and distro.package_manager in {"dnf", "dnf5"}:
+        return ["sudo", distro.package_manager, "install", "-y", *packages]
     return []
 
 
