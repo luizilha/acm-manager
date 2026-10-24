@@ -1,5 +1,8 @@
 # AC Manager — Assetto Corsa no Linux
 
+[![Build AppImage](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml/badge.svg)](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml)
+[**Baixar o AppImage mais recente**](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.0-x86_64.AppImage)
+
 Gerenciador desktop para Assetto Corsa no Linux, **sem Content Manager**: status do ambiente, Proton/CSP, instalação de mods, catálogo de pistas, servidores e inventário de conteúdo.
 
 > Projeto independente, não afiliado à Kunos Simulazioni, ao Content Manager ou às comunidades de servidores.
