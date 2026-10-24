@@ -406,6 +406,14 @@ Para assettoworld (JS/verificação), use `--browser` ou passe o arquivo baixado
 - RAR depende de `unrar`; 7z usa `7z`/`7zz` ou `bsdtar`.
 - O filtro **Só sem mods** considera apenas conteúdo oficial, não acesso livre.
 
+## Contribuidores
+
+- **Luiz Ilha** — maintainer e testes no ambiente real Linux/Proton.
+- **DeepSeek** — assistência de IA em arquitetura, implementação, debugging, documentação, i18n, empacotamento e CI.
+
+O projeto teve assistência de IA, com revisão, execução e validação humana das mudanças.
+Veja [CONTRIBUTORS.md](CONTRIBUTORS.md) e os trailers `Co-authored-by` dos commits.
+
 ## Licença
 
 MIT — veja [LICENSE](LICENSE). Avisos de componentes de terceiros estão em
