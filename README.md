@@ -46,6 +46,19 @@ python3 acm.py install-csp --yes
 
 `set-proton` edita o `config.vdf` com backup (`config.vdf.acm-backup`). Se o Steam estiver aberto, ele mostra o caminho na UI em vez de arriscar sobrescrever.
 
+### Dependências por distro
+
+O setup detecta a distro e adapta os comandos. Equivalências usadas:
+
+| Distro | Gerenciador | Pacotes |
+|---|---|---|
+| Arch/CachyOS/Manjaro | `pacman` | `protontricks unrar p7zip libarchive cabextract` |
+| Debian/Ubuntu/Mint | `apt-get` | `protontricks unrar p7zip-full libarchive-tools cabextract` |
+| Fedora/Nobara | `dnf` | `protontricks unrar p7zip-plugins bsdtar cabextract` |
+
+Em Debian/Ubuntu, `unrar` pode estar em `non-free`; em Fedora, pode exigir RPM Fusion.
+Se o pacote `protontricks` não existir no repositório, o app tenta `pipx install protontricks`.
+
 ## Interface gráfica (AppImage)
 
 Arquivo pronto:
