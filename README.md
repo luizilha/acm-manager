@@ -1,7 +1,7 @@
 # AC Manager — Assetto Corsa on Linux
 
 [![Build AppImage](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml/badge.svg)](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml)
-[**Download the latest AppImage**](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.0-x86_64.AppImage)
+[**Download the latest AppImage**](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1-x86_64.AppImage)
 
 A desktop manager for **Assetto Corsa on Linux**, built to replace the parts of
 Content Manager that Linux users actually need: environment setup, mod
@@ -35,12 +35,12 @@ content management.
 ## Download and run
 
 1. Download the AppImage:
-   [latest release](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.0-x86_64.AppImage)
+   [latest release](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1-x86_64.AppImage)
 2. Make it executable and run:
 
 ```bash
-chmod +x acm-manager-1.0-x86_64.AppImage
-./acm-manager-1.0-x86_64.AppImage
+chmod +x acm-manager-1.1-x86_64.AppImage
+./acm-manager-1.1-x86_64.AppImage
 ```
 
 The AppImage is built automatically by GitHub Actions on every push to `main`
@@ -50,11 +50,11 @@ the downloadable binaries.
 If FUSE is unavailable:
 
 ```bash
-APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.0-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1-x86_64.AppImage
 ```
 
 Requirements, per-distro packages, Proton/CSP details, and troubleshooting are
-in **[SETUP.md](SETUP.md)**.
+in **[SETUP.md](SETUP.md)**. Version history is in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## First run — graphical workflow
 
@@ -73,13 +73,20 @@ Open the **Linux Status** tab.
 
 The wizard is idempotent: already-correct components are detected and skipped.
 
+To configure your controller, use **Open in default mode** in the Linux Status
+tab: it restores the original AC launcher and opens the game through Steam, so
+you can bind inputs in **Options → Controls**. The next server join re-applies
+the direct launch.
+
 ### 2. Install mods
 
 Open **Install mods**:
 
 - drag an archive anywhere onto the window, or
 - click **Choose file…**, or
-- paste a direct download URL and click **Download from URL**.
+- paste a direct download URL and click **Download from URL**, or
+- click **No Hesi cars (CDN)** to browse and install cars from
+  `cdn.nohesi.gg` (mark only what you need; the full index is ~45 GiB).
 
 The app extracts the archive to a staging directory, detects cars, tracks,
 layouts, apps, weather, fonts, and CSP, then copies only the recognized content
@@ -95,7 +102,18 @@ Open **Servers**:
 - use **Only mods OK** for servers where all required content is already
   installed;
 - click **Find mods** to see exactly what is missing and open the track catalog;
+  No Hesi cars install straight from their CDN when clicked, and **Install all
+  No Hesi** downloads every missing one for that server;
+- when the server advertises download links (in its details or name — Discord,
+  Google Drive, MediaFire, direct files), the same dialog lists them under
+  **Where to download** and offers **Download and install** for supported hosts;
 - click **Join** to choose an allowed installed car and enter the server.
+- if the chosen car has no free slot on that instance, the app warns before
+  launching and offers another instance of the same track with a free slot, or
+  another installed car that has one;
+- Assetto Corsa loads **every** car model in the server's entry list, not only
+  yours. If any are missing, the app explains it and can download them from the
+  server itself when it provides `content.cars` links.
 
 The app also reads the server's extended details to warn about license/password
 or entry-list restrictions, and writes the server's CSP features to `race.ini`.
@@ -141,7 +159,7 @@ Build the AppImage:
 
 The script installs build dependencies into `.venv` from
 `requirements-build.txt`, runs PyInstaller, and creates
-`acm-manager-1.0-x86_64.AppImage`.
+`acm-manager-1.1-x86_64.AppImage`.
 
 ## Architecture
 
@@ -169,7 +187,7 @@ troubleshooting.
 ## Development and releases
 
 - `main` builds a rolling AppImage and updates the `latest` release.
-- Tags like `v1.0` create versioned releases.
+- Tags like `v1.1` create versioned releases.
 - Every workflow run also uploads an AppImage artifact.
 - Source checks: `python3 -m py_compile acm.py acm_gui.py acm_lib/*.py gui/*.py gui/tabs/*.py`.
 

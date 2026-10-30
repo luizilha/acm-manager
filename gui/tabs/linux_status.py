@@ -101,12 +101,25 @@ class LinuxStatusTab(QWidget):
             actions.addWidget(button)
         actions.addStretch(1)
         layout.addLayout(actions)
+
+        play = QHBoxLayout()
+        play.setSpacing(8)
+        self.btn_play = QPushButton(i18n.tr("Abrir no modo padrão"))
+        self.btn_play.setObjectName("Primary")
+        self.btn_play.setToolTip(i18n.tr(
+            "Restaura o launcher original e abre o AC pelo Steam para configurar o controle"
+        ))
+        self.btn_play.clicked.connect(self.open_default_mode)
+        play.addWidget(self.btn_play)
+        play.addStretch(1)
+        layout.addLayout(play)
         layout.addStretch(1)
 
     def set_busy(self, on: bool):
         for button in (
             self.btn_setup, self.btn_csp, self.btn_proton,
-            self.btn_fonts, self.btn_deps, self.btn_refresh, self.banner_btn,
+            self.btn_fonts, self.btn_deps, self.btn_refresh, self.btn_play,
+            self.banner_btn,
         ):
             button.setEnabled(not on)
 
@@ -260,3 +273,15 @@ class LinuxStatusTab(QWidget):
         ac = acm.detect_ac()
         if ac:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(ac.ac_root)))
+
+    def open_default_mode(self):
+        note = i18n.tr(
+            "Isso restaura o launcher original do AC e abre o jogo pelo Steam em modo padrão.\n\n"
+            "Use Options → Controls no launcher para associar os controles.\n\n"
+            "O Assetto Corsa precisa estar fechado. Continuar?"
+        )
+        self.host.run_task(
+            i18n.tr("Abrir no modo padrão"),
+            acm.launch_default_mode,
+            note,
+        )

@@ -46,6 +46,15 @@ _EN: dict[str, str] = {
         "Install unrar, 7z, bsdtar and cabextract using your distro package manager?",
     "Atualizar status": "Refresh status",
     "Abrir pasta do AC": "Open AC folder",
+    "Abrir no modo padrão": "Open in default mode",
+    "Restaura o launcher original e abre o AC pelo Steam para configurar o controle":
+        "Restores the original launcher and opens AC through Steam so you can bind the controller",
+    "Isso restaura o launcher original do AC e abre o jogo pelo Steam em modo padrão.\n\n"
+    "Use Options → Controls no launcher para associar os controles.\n\n"
+    "O Assetto Corsa precisa estar fechado. Continuar?":
+        "This restores the original AC launcher and opens the game through Steam in default mode.\n\n"
+        "Use Options → Controls in the launcher to bind the controller.\n\n"
+        "Assetto Corsa must be closed. Continue?",
     "Configuração pendente. O assistente instala Proton-GE 9-20, CSP, fontes e protontricks.":
         "Configuration pending. The wizard installs Proton-GE 9-20, CSP, fonts and protontricks.",
     "Tudo pronto": "Everything ready",
@@ -116,6 +125,33 @@ _EN: dict[str, str] = {
     "Itens existentes serão mantidos.": "Existing items will be kept.",
     "A URL precisa começar com http:// ou https://.": "The URL must start with http:// or https://.",
     "Baixar e instalar esse mod?\n\n{url}": "Download and install this mod?\n\n{url}",
+    "Carros No Hesi (CDN)": "No Hesi cars (CDN)",
+    "Carros No Hesi": "No Hesi cars",
+    "Instala carros direto de cdn.nohesi.gg, com seleção e tamanho.":
+        "Installs cars directly from cdn.nohesi.gg, with selection and size.",
+    "Os arquivos vêm de cdn.nohesi.gg. A lista completa tem vários GB; "
+    "marque só os carros que você precisa.":
+        "Files come from cdn.nohesi.gg. The full list is several GB; "
+        "select only the cars you need.",
+    "Carregando lista do CDN…": "Loading CDN list…",
+    "Filtrar por nome do carro…": "Filter by car name…",
+    "Selecionar faltantes": "Select missing",
+    "Limpar seleção": "Clear selection",
+    "Carro": "Car",
+    "Status": "Status",
+    "instalado": "installed",
+    "Lista: {n} carros · {size} no total · {missing} faltando. "
+    "Selecionados: {sel} · {sel_size}.":
+        "List: {n} cars · {size} total · {missing} missing. "
+        "Selected: {sel} · {sel_size}.",
+    "Nenhum carro selecionado.": "No car selected.",
+    "Baixar e instalar {n} carro(s) de cdn.nohesi.gg?\n\nTotal: {size}.":
+        "Download and install {n} car(s) from cdn.nohesi.gg?\n\nTotal: {size}.",
+    "Instalar carros No Hesi": "Install No Hesi cars",
+    "Instalando {n} carro(s) do CDN No Hesi…":
+        "Installing {n} car(s) from the No Hesi CDN…",
+    "Não consegui carregar a lista do CDN: {msg}":
+        "Could not load the CDN list: {msg}",
     "Acesso ao servidor": "Server access",
     "Este servidor parece exigir licença/password, entry list ou doação.\n\n{note}\n\nSe você já tem a licença, pode continuar. Caso contrário, obtenha no Discord/site do servidor.\n\nContinuar?":
         "This server appears to require a license/password, entry list or donation.\n\n{note}\n\nIf you already have the license, you can continue. Otherwise, get it from the server's Discord/site.\n\nContinue?",
@@ -168,6 +204,45 @@ _EN: dict[str, str] = {
     "Servidor cheio": "Server full",
     "O servidor está cheio. Tentar entrar mesmo assim?":
         "The server is full. Try to join anyway?",
+    "Sem vaga": "No slot",
+    "Sem vaga para {car} em {name}": "No slot for {car} on {name}",
+    "Não há vaga livre para {car} neste servidor.":
+        "There is no free slot for {car} on this server.",
+    "Vagas livres agora: {slots}": "Free slots now: {slots}",
+    "O servidor usa entry list: cada modelo de carro tem um número fixo de vagas.":
+        "This server uses an entry list: each car model has a fixed number of slots.",
+    "nenhuma": "none",
+    "Outras instâncias com vaga para {car}:":
+        "Other instances with a slot for {car}:",
+    "Entrar em outra instância": "Join another instance",
+    "Escolher outro carro": "Choose another car",
+    "Outra instância": "Another instance",
+    "Escolha a instância:": "Choose the instance:",
+    "Outro carro": "Another car",
+    "Escolha um carro instalado com vaga:":
+        "Choose an installed car that has a free slot:",
+    "Conteúdo do servidor incompleto": "Server content incomplete",
+    "O Assetto Corsa carrega todos os carros da entry list do servidor, não só o seu.\n\n"
+    "Faltam {n} carro(s):\n{models}\n\n"
+    "Sem eles o jogo falha com “car … is missing”.":
+        "Assetto Corsa loads every car in the server's entry list, not only yours.\n\n"
+        "Missing {n} car(s):\n{models}\n\n"
+        "Without them the game fails with “car … is missing”.",
+    "Você não tem {n} carro(s) que este servidor usa:\n{models}\n\n"
+    "O AC pode exigir todos ao entrar. Se não tiver certeza, tente mesmo assim.":
+        "You do not have {n} car(s) this server uses:\n{models}\n\n"
+        "AC may require all of them. If unsure, try anyway.",
+    "Tentar mesmo assim": "Try anyway",
+    "… +{n}": "… +{n}",
+    "Baixar carros do servidor": "Download cars from the server",
+    "Instalando {n} carro(s) do servidor…": "Installing {n} car(s) from the server…",
+    "Instalar carros do servidor": "Install server cars",
+    "Baixar e instalar {n} carro(s) do próprio servidor?\n\n"
+    "Pode baixar vários GB e demorar bastante. O jogo deve estar fechado.":
+        "Download and install {n} car(s) from the server itself?\n\n"
+        "This can download several GB and take a while. The game must be closed.",
+    "{have} de {n} têm link de download no servidor; o resto precisa ser manual.":
+        "{have} of {n} have a download link on the server; the rest must be installed manually.",
     "Lançamento direto": "Direct launch",
     "Para entrar direto no servidor, o app substitui o AssettoCorsa.exe pelo acs.exe.\n\nO launcher original é preservado como AssettoCorsa_original.exe.\n\nContinuar?":
         "To join directly, the app replaces AssettoCorsa.exe with acs.exe.\n\nThe original launcher is kept as AssettoCorsa_original.exe.\n\nContinue?",
@@ -197,10 +272,33 @@ _EN: dict[str, str] = {
     "Carros faltando ({n}):": "Missing cars ({n}):",
     "Você tem todo o conteúdo necessário para este servidor.":
         "You have all content required by this server.",
-    "Links de Google Drive, MediaFire e arquivos diretos são baixados e instalados ao clicar. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) e Ko-fi abrem no navegador para você baixar manualmente. O catálogo cobre pistas; carros continuam no Google.":
-        "Google Drive, MediaFire and direct-file links are downloaded and installed on click. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) and Ko-fi open in the browser for manual download. The catalog covers tracks; cars still use Google.",
+    "Links de Google Drive, MediaFire e arquivos diretos são baixados e instalados ao clicar. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) e Ko-fi abrem no navegador para você baixar manualmente. O catálogo cobre pistas; carros No Hesi vêm do CDN e os demais usam o Google.":
+        "Google Drive, MediaFire and direct-file links are downloaded and installed on click. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) and Ko-fi open in the browser for manual download. The catalog covers tracks; No Hesi cars come from the CDN and the rest use Google.",
+    "Carros No Hesi instalam direto do CDN ao clicar; use o botão abaixo para instalar todos.":
+        "No Hesi cars install straight from the CDN on click; use the button below to install all of them.",
+    "Instalar todos os No Hesi ({n} · {size})":
+        "Install all No Hesi ({n} · {size})",
+    "Instalando {car} do CDN No Hesi…":
+        "Installing {car} from the No Hesi CDN…",
+    "Instalar {car}": "Install {car}",
+    "Baixar e instalar {n} carro(s) No Hesi deste servidor?\n\nTotal: {size}.":
+        "Download and install {n} No Hesi car(s) from this server?\n\nTotal: {size}.",
     "Fonte do catálogo: AC Tracks Listing by Breathe":
         "Catalog source: AC Tracks Listing by Breathe",
+    "baixar e instalar": "download and install",
+    "O servidor não informou links de download.":
+        "The server did not provide download links.",
+    "Buscar o servidor no Google": "Search this server on Google",
+    "Baixar e instalar este link indicado pelo servidor?\n\n{label}\n{url}\n\nFonte: {host}":
+        "Download and install this link provided by the server?\n\n{label}\n{url}\n\nSource: {host}",
+    "Baixar e instalar este link indicado pelo servidor?\n\n{label}\n{url}\n\nFonte: {host}\n\nO arquivo é extraído e instalado em AC.":
+        "Download and install this link provided by the server?\n\n{label}\n{url}\n\nSource: {host}\n\nThe archive is extracted and installed into AC.",
+    "Baixando do link do servidor: {url}":
+        "Downloading from the server link: {url}",
+    "Baixar e instalar do servidor": "Download and install from the server",
+    "O servidor indica: {links}": "The server suggests: {links}",
+    "Baixar do link do servidor": "Download from the server link",
+    "Abrir link do servidor": "Open the server link",
     "Atualizar catálogo": "Refresh catalog",
     "Fechar": "Close",
     "Baixar e instalar": "Download and install",

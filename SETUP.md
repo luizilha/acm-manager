@@ -56,14 +56,14 @@ Flatpak `com.github.Matoking.protontricks` when Steam itself is Flatpak.
 ## 3. Running the AppImage
 
 ```bash
-chmod +x acm-manager-1.0-x86_64.AppImage
-./acm-manager-1.0-x86_64.AppImage
+chmod +x acm-manager-1.1-x86_64.AppImage
+./acm-manager-1.1-x86_64.AppImage
 ```
 
 If FUSE is missing:
 
 ```bash
-APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.0-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1-x86_64.AppImage
 ```
 
 The AppImage is built on Ubuntu 22.04 by GitHub Actions for broader glibc
@@ -184,6 +184,23 @@ Recognized content:
 A failed install exits non-zero. If every item already exists, the app reports
 that nothing was installed instead of printing “Done”.
 
+### No Hesi car CDN
+
+`https://cdn.nohesi.gg/cars/` exposes an index of car archives (511 files,
+~45 GiB). The **Install mods** tab has **No Hesi cars (CDN)**, a table with
+search, size, installed status and checkboxes, so you can install a subset.
+The same list is available from the CLI:
+
+```bash
+python3 acm.py nohesi-cars                      # missing cars
+python3 acm.py nohesi-cars --filter mustang     # search
+python3 acm.py nohesi-cars --filter mustang --install --yes
+python3 acm.py nohesi-cars --all --limit 20     # includes installed
+```
+
+The index is cached for 24 h at `~/.cache/acm/nohesi-cars.json`; use
+`--refresh` (CLI) or **Refresh list** to update it.
+
 ## 8. Track catalog and downloads
 
 The app uses the public **AC Tracks Listing by Breathe** Google Sheet and caches
@@ -271,6 +288,33 @@ Typical `race.ini` location:
 The app also reads the server description to warn about license/password,
 entry-list, or donation requirements. It does not bypass access restrictions.
 
+AssettoServer reserves entry-list slots **per car model**, so a server with free
+player slots can still refuse the chosen car with
+`Can't join the server: no available slots`. Before launching, the app reads
+`/api/details` and checks whether the selected car has a free slot. When it does
+not, it shows the models that currently have slots and offers another instance
+of the same track with a free slot for that car, or another installed car that
+has one.
+
+The AC client also loads **every car model in the server's entry list**, not
+only the car you drive. A missing model aborts the join with
+`Can't join this server: car "…" is missing`. The app lists the missing models
+and, when the server exposes `content.cars` URLs, can download and install them
+directly from the server (button **Baixar carros do servidor** in the dialog, or
+`python3 acm.py join ... --install-missing`).
+
+In **Buscar mods**, missing cars that exist in the No Hesi CDN are matched
+against `cdn.nohesi.gg/cars/` and install on click; the **Instalar todos os No
+Hesi** button downloads all missing No Hesi cars for that server at once.
+
+The dialog also shows **Onde baixar (indicado pelo servidor)**: links found in
+the server's `/api/details` description (AssettoServer) or in the server name
+(Kunos servers). Direct archives, Google Drive, MediaFire and `acstuff.ru` links
+offer **baixar e instalar**; other hosts (Discord, Mega, Patreon, …) open in the
+browser. When the entry list is not exposed (e.g. `ACF #2 GTE LEGENDS`), the
+join dialog falls back to the lobby car list, shows the server's Discord/website
+link and lets you continue anyway.
+
 ## 10. Direct launch
 
 To make Steam start `acs.exe` directly, the first join copies:
@@ -286,12 +330,23 @@ with:
 python3 acm.py restore-launcher
 ```
 
+To restore it **and** open the game through Steam in the normal launcher (for
+example to bind controller inputs in **Options → Controls**), use **Open in
+default mode** in the Linux Status tab or:
+
+```bash
+python3 acm.py launch-default
+```
+
+The next server join applies the direct launch again.
+
 ## 11. Files and state
 
 ```text
 ~/.cache/acm/
   servers.json             lobby cache
   tracks-catalog.json      track catalog cache
+  nohesi-cars.json         No Hesi CDN car index cache (24 h)
   downloads/               downloaded archives
   fonts.zip                font archive
 
@@ -324,6 +379,8 @@ Common failures:
 | AppImage won't start | install FUSE2 or use `APPIMAGE_EXTRACT_AND_RUN=1` |
 | RAR fails | install `unrar`; 7z can fall back to `bsdtar` |
 | `Handshake FAILED` | server license/password/entry list, wrong ports, or missing CSP features |
+| `Can't join the server: no available slots` | the car model has no free entry-list slot; pick another car or another instance (the app checks this before launching) |
+| `Can't join this server: car "…" is missing` | AC requires every model in the entry list; use **Baixar carros do servidor** or `join --install-missing` |
 | `Missing CSP features` | update CSP; the app writes `__FEATURES` from `/api/details` |
 | Server shows `layout` missing | install the specific layout pack; base track alone is not enough |
 

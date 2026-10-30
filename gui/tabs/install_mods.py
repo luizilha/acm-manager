@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 import acm
 from gui import i18n
 from gui.common import DropZone
+from gui.tabs.nohesi_dialog import NoHesiCarsDialog
 
 
 class InstallModsTab(QWidget):
@@ -69,14 +70,30 @@ class InstallModsTab(QWidget):
         hint.setObjectName("DropHint")
         hint.setWordWrap(True)
         left.addWidget(hint)
+
+        nohesi = QHBoxLayout()
+        self.btn_nohesi = QPushButton(i18n.tr("Carros No Hesi (CDN)"))
+        self.btn_nohesi.clicked.connect(self.open_nohesi_cars)
+        nohesi_hint = QLabel(i18n.tr(
+            "Instala carros direto de cdn.nohesi.gg, com seleção e tamanho."
+        ))
+        nohesi_hint.setObjectName("DropHint")
+        nohesi_hint.setWordWrap(True)
+        nohesi.addWidget(self.btn_nohesi)
+        nohesi.addWidget(nohesi_hint, 1)
+        left.addLayout(nohesi)
         left.addStretch(1)
         body.addLayout(left, 1)
 
     def set_busy(self, on: bool):
         self.btn_pick.setEnabled(not on)
         self.btn_url.setEnabled(not on)
+        self.btn_nohesi.setEnabled(not on)
         self.force.setEnabled(not on)
         self.btn_install_mod.setEnabled(not on and bool(self._selected_file))
+
+    def open_nohesi_cars(self):
+        NoHesiCarsDialog(self.host, self).exec()
 
     def pick_file(self):
         path, _ = QFileDialog.getOpenFileName(

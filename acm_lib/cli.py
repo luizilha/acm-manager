@@ -218,15 +218,66 @@ def cmd_join(args) -> int:
         print(f"  carro: {car}")
         print(f"  instalados: {', '.join(status['installed_cars'][:10])}")
         print(f"  faltando: {', '.join(status['missing_cars'][:10]) or 'nenhum'}")
+        details = fetch_server_details(server)
+        has_entry = bool(
+            isinstance(details, dict)
+            and isinstance(details.get("players"), dict)
+            and details["players"].get("Cars")
+        )
+        missing = (
+            missing_entry_cars(details, local) if has_entry
+            else list(status.get("missing_cars") or [])
+        )
+        if missing:
+            print(f"  [x] entry list: {len(missing)} carro(s) faltando: "
+                  + ", ".join(missing[:10]) + (" ..." if len(missing) > 10 else ""))
+        else:
+            print("  entry list: OK")
+        slot_ok, slots = check_car_slot(server, car, details)
+        if slot_ok is False:
+            free = sorted(slots.get("free", {}).items(), key=lambda item: (-item[1], item[0]))
+            print(f"  [x] sem vaga para {car} "
+                  f"({slots.get('clients')}/{slots.get('maxclients')} jogadores); "
+                  "livres: " + (", ".join(f"{m} x{n}" for m, n in free) or "nenhuma"))
+        elif slot_ok:
+            print(f"  vaga para {car}: OK")
+        else:
+            print("  vaga: servidor não informou a entry list")
         write_remote_ini(server, car, args.password or "", ac, dry_run=True)
         return 0
-    return join_server(server, car, args.password or "", not args.no_launch, args.yes)
+    return join_server(server, car, args.password or "", not args.no_launch, args.yes,
+                       args.install_missing)
 
 def cmd_restore_launcher(_args) -> int:
     return restore_launcher()
 
+def cmd_launch_default(_args) -> int:
+    return launch_default_mode()
+
 def cmd_install_mod(args) -> int:
     return install_mod(args.source, args.dry_run, args.force, args.merge, args.browser, args.yes)
+
+def cmd_nohesi_cars(args) -> int:
+    ac = detect_ac()
+    if not ac:
+        eprint("[x] AC não encontrado.")
+        return 1
+    index = fetch_nohesi_car_index(force=args.refresh)
+    local = local_content(ac)
+    items = index if args.all else nohesi_missing_cars(index, local)
+    if args.filter:
+        needle = args.filter.lower()
+        items = [item for item in items if needle in item["model"].lower()]
+    total = sum(item["size"] for item in items)
+    print(f"{len(items)} carro(s) · {human(total)}"
+          + (" (todos)" if args.all else " faltando"))
+    for item in items[:args.limit]:
+        print(f"{human(item['size']):>10}  {item['model']}")
+    if len(items) > args.limit:
+        print(f"... +{len(items) - args.limit}")
+    if not args.install:
+        return 0
+    return install_nohesi_cars([item["model"] for item in items], args.yes, index)
 
 def cmd_install_protontricks(args) -> int:
     return install_protontricks(args.yes)
@@ -328,12 +379,18 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--car", help="ID do carro (padrão: primeiro instalado do servidor)")
     q.add_argument("--password")
     q.add_argument("--no-launch", action="store_true", help="Só grava o race.ini, sem abrir o AC")
+    q.add_argument("--install-missing", action="store_true",
+                   help="Baixa do servidor os carros da entry list que faltam")
     q.add_argument("--dry-run", action="store_true")
     q.add_argument("--yes", action="store_true")
     q.set_defaults(func=cmd_join)
 
     q = sub.add_parser("restore-launcher", help="Restaura o AssettoCorsa.exe original")
     q.set_defaults(func=cmd_restore_launcher)
+
+    q = sub.add_parser("launch-default",
+                       help="Restaura o launcher e abre o AC pelo Steam (modo padrão)")
+    q.set_defaults(func=cmd_launch_default)
 
     q = sub.add_parser("install-mod", help="Baixa/instala um mod")
     q.add_argument("source", help="Arquivo local ou URL")
@@ -343,6 +400,15 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--browser", action="store_true", help="Abre no navegador e espera o download")
     q.add_argument("--yes", action="store_true")
     q.set_defaults(func=cmd_install_mod)
+
+    q = sub.add_parser("nohesi-cars", help="Lista/instala carros do CDN do No Hesi")
+    q.add_argument("--install", action="store_true", help="Instala os carros listados")
+    q.add_argument("--all", action="store_true", help="Inclui também os já instalados")
+    q.add_argument("--filter", help="Filtra pelo nome do carro")
+    q.add_argument("--refresh", action="store_true", help="Ignora o cache da listagem")
+    q.add_argument("--limit", type=int, default=50)
+    q.add_argument("--yes", action="store_true")
+    q.set_defaults(func=cmd_nohesi_cars)
 
     args = p.parse_args(argv)
     try:

@@ -32,6 +32,13 @@ from .base import *
 from .base import _csp_build
 
 
+NO_HESI_CARS_URL = "https://cdn.nohesi.gg/cars/"
+NO_HESI_CARS_CACHE = CACHE / "nohesi-cars.json"
+NO_HESI_CARS_TTL = 24 * 3600
+
+_NO_HESI_ROW = re.compile(r'<a href="([^"]+?\.7z)"[^>]*>.*?</a></td><td class="size">([^<]+)</td>')
+
+
 def local_content(ac: AcInstall) -> dict:
     def folders(path: Path) -> set[str]:
         try:
@@ -248,8 +255,111 @@ def delete_content(path: str, ac: AcInstall | None = None) -> Path:
     return dest
 
 def mod_search_url(kind: str, mod_id: str) -> str:
-    query = urllib.parse.quote_plus(f"Assetto Corsa {mod_id} {kind} mod download")
+    term = mod_id.replace("_", " ") if kind == "car" else mod_id
+    query = urllib.parse.quote_plus(f"Assetto Corsa {term} {kind} mod download")
     return f"https://www.google.com/search?q={query}"
+
+
+def _nohesi_size_bytes(text: str) -> int:
+    match = re.match(r"\s*([\d.,]+)\s*(B|KiB|MiB|GiB|TiB)", text.replace("\xa0", " "))
+    if not match:
+        return 0
+    value = float(match.group(1).replace(",", ""))
+    units = {"B": 1, "KiB": 1024, "MiB": 1024 ** 2, "GiB": 1024 ** 3, "TiB": 1024 ** 4}
+    return int(value * units[match.group(2)])
+
+
+def fetch_nohesi_car_index(force: bool = False, ttl: int = NO_HESI_CARS_TTL) -> list[dict]:
+    """Lista os carros publicados em cdn.nohesi.gg/cars (modelo, URL e tamanho)."""
+    now = time.time()
+    if not force and NO_HESI_CARS_CACHE.exists():
+        try:
+            cached = json.loads(NO_HESI_CARS_CACHE.read_text(encoding="utf-8"))
+            if now - float(cached.get("fetched_at", 0)) < ttl:
+                cars = cached.get("cars")
+                if isinstance(cars, list) and cars:
+                    return cars
+        except Exception:
+            pass
+    req = urllib.request.Request(NO_HESI_CARS_URL, headers={"User-Agent": UA, "Accept": "text/html"})
+    with urllib.request.urlopen(req, timeout=60) as response:
+        page = response.read().decode("utf-8", "replace")
+    cars: list[dict] = []
+    seen: set[str] = set()
+    for href, size in _NO_HESI_ROW.findall(page):
+        name = urllib.parse.unquote(html_lib.unescape(href))
+        model = name[:-3] if name.lower().endswith(".7z") else name
+        key = model.lower()
+        if not model or key in seen:
+            continue
+        seen.add(key)
+        cars.append({
+            "model": model,
+            "url": urllib.parse.urljoin(NO_HESI_CARS_URL, href),
+            "size": _nohesi_size_bytes(size),
+        })
+    if not cars:
+        raise RuntimeError("A listagem de carros do CDN No Hesi veio vazia.")
+    cars.sort(key=lambda item: item["model"].lower())
+    try:
+        NO_HESI_CARS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        NO_HESI_CARS_CACHE.write_text(
+            json.dumps({"fetched_at": now, "url": NO_HESI_CARS_URL, "cars": cars}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return cars
+
+
+def nohesi_missing_cars(index: list[dict], local: dict | None) -> list[dict]:
+    installed = {str(car).lower() for car in ((local or {}).get("cars") or set())}
+    return [item for item in index if item["model"].lower() not in installed]
+
+
+def install_nohesi_cars(models: Iterable[str], assume_yes: bool = True,
+                        index: list[dict] | None = None) -> int:
+    """Baixa e instala carros do CDN No Hesi, ignorando os já instalados."""
+    ac = detect_ac()
+    if not ac:
+        eprint("[x] AC não encontrado.")
+        return 1
+    index = index or fetch_nohesi_car_index()
+    by_model = {item["model"].lower(): item for item in index}
+    installed = {str(car).lower() for car in (local_content(ac).get("cars") or set())}
+    todo: list[dict] = []
+    unknown: list[str] = []
+    for model in dict.fromkeys(str(model) for model in models if model):
+        item = by_model.get(model.lower())
+        if item is None:
+            unknown.append(model)
+            continue
+        if item["model"].lower() in installed:
+            continue
+        todo.append(item)
+    if unknown:
+        eprint("[!] Fora da lista do CDN: " + ", ".join(unknown[:20]))
+    if not todo:
+        print("[i] Nada a instalar: os carros já estão instalados.")
+        return 0 if not unknown else 1
+    total = sum(item["size"] for item in todo)
+    print(f"[i] {len(todo)} carro(s) do CDN No Hesi ({human(total)})…")
+    from .installer import install_mod
+    failed: list[str] = []
+    for position, item in enumerate(todo, 1):
+        print(f"\n=== [{position}/{len(todo)}] {item['model']} ({human(item['size'])}) ===")
+        try:
+            rc = install_mod(item["url"], False, False, False, False, assume_yes)
+        except Exception as e:
+            eprint(f"[x] {item['model']}: {e}")
+            rc = 1
+        if rc != 0:
+            failed.append(item["model"])
+    if failed:
+        eprint("[x] Falhou: " + ", ".join(failed[:20]))
+        return 1
+    print(f"[✓] {len(todo)} carro(s) instalado(s) do CDN No Hesi.")
+    return 0
 
 def _track_candidates(server: dict) -> set[str]:
     raw = str(server.get("track") or "")

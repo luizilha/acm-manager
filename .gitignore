@@ -12,6 +12,7 @@ tools/
 *.spec
 *.AppImage
 *.AppImage.zsync
+*.AppImage.bak
 
 # Cache, downloads, backups e lixo local
 .cache/

@@ -6,11 +6,11 @@ import html
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from PySide6.QtCore import QThread, Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtCore import QThread, Qt, QUrl, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QHBoxLayout, QHeaderView, QInputDialog,
-    QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget,
+    QAbstractItemView, QApplication, QCheckBox, QHBoxLayout, QHeaderView,
+    QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -341,8 +341,10 @@ class ServersTab(QWidget):
             return
         item = self.server_table.item(row, 0)
         server = item.data(Qt.ItemDataRole.UserRole) if item else None
-        if not server:
-            return
+        if server:
+            self._join_flow(server)
+
+    def _join_flow(self, server: dict, car_hint: str | None = None, depth: int = 0):
         self._reload_local_content()
         if acm.is_process_running("acs.exe") or acm.is_process_running("AssettoCorsa.exe"):
             QMessageBox.warning(
@@ -372,7 +374,9 @@ class ServersTab(QWidget):
                 i18n.tr("Este servidor pede CSP build {required}; você tem {installed}.", required=status["required_csp"], installed=status["csp_build"] or i18n.tr("nenhum")),
             )
             return
-        details = acm.fetch_server_details(server, timeout=5)
+        details = server.get("_details") if depth > 0 else None
+        if not details:
+            details = acm.fetch_server_details(server, timeout=5)
         if details:
             server["_details"] = details
         access_note = acm.server_access_note(details)
@@ -389,6 +393,17 @@ class ServersTab(QWidget):
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
+        missing_entry = acm.missing_entry_cars(details, self._local_content)
+        has_entry = bool(
+            isinstance(details, dict)
+            and isinstance(details.get("players"), dict)
+            and details["players"].get("Cars")
+        )
+        if not has_entry:
+            missing_entry = list(status.get("missing_cars") or [])
+        if missing_entry:
+            if not self._handle_missing_entry(server, missing_entry, details, status):
+                return
         installed = status["installed_cars"]
         if not installed:
             QMessageBox.warning(
@@ -396,7 +411,9 @@ class ServersTab(QWidget):
                 i18n.tr("Nenhum carro do servidor está instalado.\n\nFaltando:\n{items}", items="\n".join(status["missing_cars"][:20])),
             )
             return
-        if len(installed) == 1:
+        if car_hint and any(c.lower() == car_hint.lower() for c in installed):
+            car = next(c for c in installed if c.lower() == car_hint.lower())
+        elif len(installed) == 1:
             car = installed[0]
         else:
             car, ok = QInputDialog.getItem(
@@ -406,6 +423,15 @@ class ServersTab(QWidget):
             )
             if not ok or not car:
                 return
+        slot_ok, slots = acm.check_car_slot(server, car, server.get("_details"))
+        if slot_ok is False:
+            resolved = self._resolve_no_slot(server, car, installed, slots, depth)
+            if resolved is None:
+                return
+            new_server, new_car = resolved
+            if new_server is not server:
+                return self._join_flow(new_server, new_car, depth + 1)
+            car = new_car
         password = ""
         if server["pass"]:
             password, ok = QInputDialog.getText(
@@ -414,7 +440,9 @@ class ServersTab(QWidget):
             )
             if not ok:
                 return
-        if server["clients"] >= server["maxclients"]:
+        clients = slots.get("clients", server["clients"]) if slots else server["clients"]
+        maxclients = slots.get("maxclients", server["maxclients"]) if slots else server["maxclients"]
+        if clients >= maxclients:
             answer = QMessageBox.question(
                 self, i18n.tr("Servidor cheio"),
                 i18n.tr("O servidor está cheio. Tentar entrar mesmo assim?"),
@@ -443,6 +471,77 @@ class ServersTab(QWidget):
             i18n.tr("Entrar no servidor"),
             lambda: acm.join_server(server, car, password, True, True),
         )
+
+    def _resolve_no_slot(self, server: dict, car: str, installed: list[str],
+                         slots: dict, depth: int) -> tuple[dict, str] | None:
+        """Mostra as alternativas quando o carro escolhido está sem vaga."""
+        free = sorted(slots.get("free", {}).items(), key=lambda item: (-item[1], item[0]))
+        free_text = ", ".join(f"{model} x{count}" for model, count in free) or i18n.tr("nenhuma")
+        lines = [
+            i18n.tr("Não há vaga livre para {car} neste servidor.", car=car),
+            i18n.tr("Jogadores: {current}/{max}", current=slots.get("clients", server["clients"]), max=slots.get("maxclients", server["maxclients"])),
+            i18n.tr("Vagas livres agora: {slots}", slots=free_text),
+            i18n.tr("O servidor usa entry list: cada modelo de carro tem um número fixo de vagas."),
+        ]
+        self.host.append_log(i18n.tr("Sem vaga para {car} em {name}", car=car, name=server["name"]))
+        alt_cars = [
+            c for c in installed
+            if any(model.lower() == c.lower() and count > 0 for model, count in slots.get("free", {}).items())
+        ]
+        alt_servers: list[dict] = []
+        if depth < 2:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                alt_servers = acm.find_slot_alternatives(self._servers, car, server["track"], server)
+            except Exception as e:
+                self.host.append_log(f"[!] {e}")
+            finally:
+                QApplication.restoreOverrideCursor()
+        info = []
+        if alt_servers:
+            info.append(i18n.tr("Outras instâncias com vaga para {car}:", car=car))
+            for item in alt_servers:
+                s = item["server"]
+                info.append(f"· {s['name']} — {s['ip']}:{s['port']} ({s['clients']}/{s['maxclients']})")
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(i18n.tr("Sem vaga"))
+        box.setText("\n".join(lines))
+        if info:
+            box.setInformativeText("\n".join(info))
+        btn_server = None
+        btn_car = None
+        if alt_servers:
+            btn_server = box.addButton(i18n.tr("Entrar em outra instância"), QMessageBox.ButtonRole.AcceptRole)
+        if alt_cars:
+            btn_car = box.addButton(i18n.tr("Escolher outro carro"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_server:
+            labels = [
+                f"{item['server']['name']} — {item['server']['ip']}:{item['server']['port']} "
+                f"({item['server']['clients']}/{item['server']['maxclients']})"
+                for item in alt_servers
+            ]
+            choice, ok = QInputDialog.getItem(
+                self, i18n.tr("Outra instância"),
+                i18n.tr("Escolha a instância:"),
+                labels, 0, False,
+            )
+            if not ok or not choice:
+                return None
+            return alt_servers[labels.index(choice)]["server"], car
+        if clicked is btn_car:
+            choice, ok = QInputDialog.getItem(
+                self, i18n.tr("Outro carro"),
+                i18n.tr("Escolha um carro instalado com vaga:"),
+                alt_cars, 0, False,
+            )
+            if not ok or not choice:
+                return None
+            return server, choice
+        return None
 
     def show_server_details(self, row: int, _column: int):
         item = self.server_table.item(row, 0)
@@ -489,3 +588,115 @@ class ServersTab(QWidget):
             if status["installed_cars"]:
                 lines.append(i18n.tr("Instalados: {items}", items=html.escape(", ".join(status["installed_cars"][:10]))))
         QMessageBox.information(self, i18n.tr("Servidor"), "<br>".join(lines))
+
+    def _handle_missing_entry(self, server: dict, missing: list[str],
+                              details: dict, status: dict) -> bool:
+        """Explica o conteúdo faltante e oferece baixar do servidor.
+
+        Retorna ``True`` para continuar o join mesmo assim (quando a entry list
+        não pôde ser lida) ou ``False`` para parar.
+        """
+        has_entry = bool(
+            isinstance(details, dict)
+            and isinstance(details.get("players"), dict)
+            and details["players"].get("Cars")
+        )
+        shown = "\n".join(f"· {model}" for model in missing[:12])
+        if len(missing) > 12:
+            shown += "\n" + i18n.tr("… +{n}", n=len(missing) - 12)
+        if has_entry:
+            text = i18n.tr(
+                "O Assetto Corsa carrega todos os carros da entry list do servidor, não só o seu.\n\n"
+                "Faltam {n} carro(s):\n{models}\n\n"
+                "Sem eles o jogo falha com “car … is missing”.",
+                n=len(missing), models=shown,
+            )
+        else:
+            text = i18n.tr(
+                "Você não tem {n} carro(s) que este servidor usa:\n{models}\n\n"
+                "O AC pode exigir todos ao entrar. Se não tiver certeza, tente mesmo assim.",
+                n=len(missing), models=shown,
+            )
+        urls = acm.server_car_downloads(details, missing)
+        links = acm.server_download_links(server, details)
+        auto_links = [link for link in links if acm.catalog_url_support(link["url"])[0]]
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(i18n.tr("Conteúdo do servidor incompleto"))
+        box.setText(text)
+        info = []
+        if urls and len(urls) < len(missing):
+            info.append(i18n.tr(
+                "{have} de {n} têm link de download no servidor; o resto precisa ser manual.",
+                have=len(urls), n=len(missing),
+            ))
+        if links:
+            info.append(i18n.tr(
+                "O servidor indica: {links}",
+                links=", ".join(f"{link['label']} ({link['host']})" for link in links[:4]),
+            ))
+        if info:
+            box.setInformativeText("\n".join(info))
+        btn_install = None
+        if urls:
+            btn_install = box.addButton(
+                i18n.tr("Baixar carros do servidor"), QMessageBox.ButtonRole.AcceptRole
+            )
+        btn_link = None
+        if auto_links:
+            btn_link = box.addButton(
+                i18n.tr("Baixar do link do servidor"), QMessageBox.ButtonRole.AcceptRole
+            )
+        elif links:
+            btn_link = box.addButton(
+                i18n.tr("Abrir link do servidor"), QMessageBox.ButtonRole.ActionRole
+            )
+        btn_skip = None
+        if not has_entry:
+            btn_skip = box.addButton(
+                i18n.tr("Tentar mesmo assim"), QMessageBox.ButtonRole.ActionRole
+            )
+        btn_search = box.addButton(i18n.tr("Buscar mods"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_install:
+            self.host.append_log(i18n.tr("Instalando {n} carro(s) do servidor…", n=len(urls)))
+            self.host.run_task(
+                i18n.tr("Instalar carros do servidor"),
+                lambda: acm.install_server_cars(server, missing, True),
+                i18n.tr(
+                    "Baixar e instalar {n} carro(s) do próprio servidor?\n\n"
+                    "Pode baixar vários GB e demorar bastante. O jogo deve estar fechado.",
+                    n=len(urls),
+                ),
+            )
+        elif clicked is btn_link:
+            link = auto_links[0] if auto_links else links[0]
+            auto, host = acm.catalog_url_support(link["url"])
+            if not auto:
+                QDesktopServices.openUrl(QUrl(link["url"]))
+                return False
+            answer = QMessageBox.question(
+                self, i18n.tr("Baixar e instalar"),
+                i18n.tr(
+                    "Baixar e instalar este link indicado pelo servidor?\n\n{label}\n{url}\n\nFonte: {host}\n\nO arquivo é extraído e instalado em AC.",
+                    label=link["label"], url=link["url"], host=host,
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return False
+            url = link["url"]
+            self.host.mark_installed_stale()
+            self.host.append_log(i18n.tr("Baixando do link do servidor: {url}", url=url))
+            self.host.run_task(
+                i18n.tr("Baixar e instalar do servidor"),
+                lambda: acm.install_mod(url, False, False, False, False, True),
+            )
+        elif clicked is btn_search:
+            MissingModsDialog(self.host, server, status, self).exec()
+        elif clicked is btn_skip:
+            return True
+        return False

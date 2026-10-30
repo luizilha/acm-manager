@@ -110,6 +110,22 @@ QHeaderView::section {
     font-weight: 600;
 }
 QTableWidget::item { padding: 4px; }
+QTableWidget::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #3a4150;
+    border-radius: 3px;
+    background: #12151b;
+}
+QTableWidget::indicator:hover { border-color: #e10600; }
+QTableWidget::indicator:checked {
+    background: #e10600;
+    border-color: #e10600;
+}
+QTableWidget::indicator:disabled {
+    background: #171a21;
+    border-color: #242936;
+}
 QTableCornerButton::section { background: #171a21; border: 0; }
 QScrollBar:vertical { background: #0f1218; width: 10px; margin: 0; border: none; }
 QScrollBar::handle:vertical { background: #2c3240; min-height: 24px; border-radius: 5px; }

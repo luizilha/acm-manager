@@ -23,6 +23,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Iterable
@@ -200,6 +201,96 @@ def fetch_server_details(server: dict, timeout: float = 5.0) -> dict | None:
         return None
 
 
+_URL_RE = re.compile(r'(?:https?://|www\.)[^\s<>"\']+', re.I)
+_DOMAIN_RE = re.compile(
+    r'\b((?:[a-z0-9-]+\.)+(?:gg|com|de|net|org|ru|io|fr|it|es|club|tv|me)/[^\s<>"\']+)',
+    re.I,
+)
+_ANCHOR_RE = re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', re.S | re.I)
+
+
+def _clean_link(url: str) -> str:
+    url = html_lib.unescape(str(url)).strip().rstrip(".,);]")
+    low = url.lower()
+    if not url or low.startswith(("javascript:", "mailto:", "#")):
+        return ""
+    if url.startswith("//"):
+        return "https:" + url
+    if url.startswith("www."):
+        return "https://" + url
+    if not low.startswith(("http://", "https://")):
+        return "https://" + url
+    return url
+
+
+def server_download_links(server: dict, details: dict | None = None) -> list[dict]:
+    """Links de download que o servidor indica (descrição e nome).
+
+    Cobre servidores AssettoServer com ``description`` HTML e servidores Kunos
+    que só põem o link (Discord, site, Drive...) no nome.
+    """
+    if details is None:
+        details = server.get("_details")
+    found: list[tuple[str, str]] = []
+    description = str(details.get("description") or "") if isinstance(details, dict) else ""
+    if description:
+        for match in _ANCHOR_RE.finditer(description):
+            url = _clean_link(match.group(1))
+            if not url:
+                continue
+            label = html_lib.unescape(re.sub(r"<[^>]+>", " ", match.group(2)))
+            found.append((" ".join(label.split())[:80], url))
+        plain = html_lib.unescape(re.sub(r"<[^>]+>", " ", description))
+        for url in _URL_RE.findall(plain):
+            if _clean_link(url):
+                found.append(("", _clean_link(url)))
+    texts = [str(server.get("name") or "")]
+    if isinstance(details, dict):
+        for key in ("website", "homepage", "url"):
+            value = details.get(key)
+            if isinstance(value, str):
+                texts.append(value)
+    for text in texts:
+        for url in _URL_RE.findall(text):
+            if _clean_link(url):
+                found.append(("", _clean_link(url)))
+        for match in _DOMAIN_RE.finditer(text):
+            if _clean_link(match.group(1)):
+                found.append(("", _clean_link(match.group(1))))
+    links: list[dict] = []
+    seen: set[str] = set()
+    for label, url in found:
+        key = url.rstrip("/").lower()
+        if key in seen:
+            continue
+        host = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
+        if not host:
+            continue
+        seen.add(key)
+        if not label:
+            if "discord" in host:
+                label = "Discord do servidor"
+            elif "drive.google" in host or "docs.google" in host:
+                label = "Google Drive"
+            elif "mediafire" in host:
+                label = "MediaFire"
+            else:
+                label = host
+        links.append({"url": url, "label": label, "host": host})
+    return links[:20]
+
+
+def server_mod_search_url(server: dict) -> str:
+    name = re.sub(r"\s*ℹ\d+\s*$", "", str(server.get("name") or "")).strip()
+    name = re.sub(r'(?:https?://|www\.)\S+', " ", name)
+    name = re.sub(r"\b\S+\.(?:gg|com|de|net|org|ru|io|fr|it|es|club|tv|me)/\S+", " ", name, flags=re.I)
+    name = re.sub(r"\bx:\S+", " ", name)
+    name = re.sub(r"\bTESTSERVER\b", " ", name, flags=re.I)
+    name = name.replace(" - ", " ")
+    name = " ".join(name.split())
+    return "https://www.google.com/search?q=" + urllib.parse.quote_plus(f"{name} mods download")
+
+
 def server_access_note(details: dict | None) -> str | None:
     """Detecta licença/password/whitelist na descrição estendida do servidor."""
     if not details:
@@ -217,6 +308,166 @@ def server_access_note(details: dict | None) -> str | None:
         return None
     clean = " ".join(text.split())
     return clean[:320]
+
+
+def server_slot_summary(details: dict | None) -> dict | None:
+    """Vagas por modelo de carro a partir de /api/details.
+
+    O AssettoServer reserva uma vaga da entry list por modelo: mesmo com
+    jogadores livres, o carro pedido pode não ter vaga. ``None`` significa que
+    o servidor não informou a lista de entradas.
+    """
+    if not isinstance(details, dict):
+        return None
+    players = details.get("players")
+    cars = players.get("Cars") if isinstance(players, dict) else None
+    if not isinstance(cars, list) or not cars:
+        return None
+    free: dict[str, int] = {}
+    total: dict[str, int] = {}
+    for entry in cars:
+        if not isinstance(entry, dict):
+            continue
+        model = str(entry.get("Model") or "")
+        if not model:
+            continue
+        total[model] = total.get(model, 0) + 1
+        if not entry.get("IsConnected"):
+            free[model] = free.get(model, 0) + 1
+    return {
+        "free": free,
+        "total": total,
+        "entries": len(cars),
+        "clients": int(details.get("clients") or 0),
+        "maxclients": int(details.get("maxclients") or 0),
+    }
+
+
+def check_car_slot(server: dict, car_id: str, details: dict | None = None) -> tuple[bool | None, dict]:
+    """Retorna (tem_vaga, resumo). ``None`` = servidor não informou as vagas."""
+    if details is None:
+        details = server.get("_details")
+    if details is None:
+        details = fetch_server_details(server)
+    summary = server_slot_summary(details)
+    if summary is None:
+        return None, {}
+    free = next(
+        (count for model, count in summary["free"].items() if model.lower() == car_id.lower()),
+        0,
+    )
+    return free > 0, summary
+
+
+def find_slot_alternatives(servers: list[dict], car_id: str, track: str,
+                           current: dict | None = None, limit: int = 6,
+                           timeout: float = 2.5) -> list[dict]:
+    """Outras instâncias da mesma pista com vaga livre para o carro."""
+    candidates = [
+        s for s in servers
+        if s is not current
+        and s.get("track") == track
+        and int(s.get("clients") or 0) < int(s.get("maxclients") or 0)
+    ]
+    candidates.sort(key=lambda s: (int(s.get("clients") or 0), str(s.get("name") or "")))
+    candidates = candidates[:limit]
+    if not candidates:
+        return []
+
+    def probe(server: dict) -> dict | None:
+        details = fetch_server_details(server, timeout=timeout)
+        if details is not None:
+            server["_details"] = details
+        ok, summary = check_car_slot(server, car_id, details)
+        if not ok:
+            return None
+        free = next(
+            (count for model, count in summary["free"].items() if model.lower() == car_id.lower()),
+            0,
+        )
+        return {"server": server, "free": free}
+
+    found: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(6, len(candidates))) as pool:
+        for result in pool.map(probe, candidates):
+            if result is not None:
+                found.append(result)
+    found.sort(key=lambda item: int(item["server"].get("clients") or 0))
+    return found
+
+
+def missing_entry_cars(details: dict | None, local: dict | None) -> list[str]:
+    """Modelos da entry list que não existem em content/cars.
+
+    O AC carrega **todos** os carros da entry list ao entrar (CarList), não só
+    o carro escolhido; um modelo ausente causa ``car "..." is missing``.
+    """
+    if not isinstance(details, dict) or not local:
+        return []
+    players = details.get("players")
+    entries = players.get("Cars") if isinstance(players, dict) else None
+    if not isinstance(entries, list):
+        return []
+    installed = {str(car).lower() for car in (local.get("cars") or set())}
+    models = {
+        str(entry.get("Model"))
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("Model")
+    }
+    return sorted(model for model in models if model.lower() not in installed)
+
+
+def server_car_downloads(details: dict | None, models: Iterable[str]) -> dict[str, str]:
+    """Links de download fornecidos pelo servidor (``content.cars`` do /api/details)."""
+    if not isinstance(details, dict):
+        return {}
+    content = details.get("content")
+    cars = content.get("cars") if isinstance(content, dict) else None
+    if not isinstance(cars, dict):
+        return {}
+    wanted = {str(model).lower(): str(model) for model in models}
+    out: dict[str, str] = {}
+    for model, info in cars.items():
+        key = str(model).lower()
+        if key in wanted and isinstance(info, dict) and info.get("url"):
+            out[str(model)] = str(info["url"])
+    return out
+
+
+def install_server_cars(server: dict, models: Iterable[str], assume_yes: bool = True) -> int:
+    """Baixa e instala os carros faltantes usando os links do próprio servidor."""
+    details = server.get("_details")
+    if details is None:
+        details = fetch_server_details(server)
+        if details is not None:
+            server["_details"] = details
+    model_list = list(dict.fromkeys(str(model) for model in models if model))
+    urls = server_car_downloads(details, model_list)
+    no_url = [model for model in model_list if model not in urls]
+    if not urls:
+        eprint("[x] O servidor não forneceu links para os carros faltantes.")
+        return 1
+    print(f"[i] Instalando {len(urls)} carro(s) a partir do servidor…")
+    failed: list[str] = []
+    for index, (model, url) in enumerate(urls.items(), 1):
+        print(f"\n=== [{index}/{len(urls)}] {model} ===")
+        from .installer import install_mod
+        try:
+            rc = install_mod(url, False, False, False, False, True if assume_yes else False)
+        except Exception as e:
+            eprint(f"[x] {model}: {e}")
+            rc = 1
+        if rc != 0:
+            failed.append(model)
+    if no_url:
+        eprint("[!] Sem link no servidor: " + ", ".join(no_url))
+    if failed:
+        eprint("[x] Falhou: " + ", ".join(failed))
+        return 1
+    if no_url:
+        return 1
+    print(f"[✓] {len(urls)} carro(s) instalado(s) do servidor.")
+    return 0
 
 
 def _remove_ini_keys(text: str, section: str, keys: list[str]) -> str:
@@ -376,6 +627,38 @@ def restore_launcher(ac: AcInstall | None = None) -> int:
     print("[✓] Launcher original restaurado.")
     return 0
 
+def launch_default_mode(ac: AcInstall | None = None) -> int:
+    """Restaura o launcher original e abre o AC pelo Steam (modo padrão)."""
+    ac = ac or detect_ac()
+    if not ac:
+        eprint("[x] AC não encontrado.")
+        return 1
+    if is_process_running("acs.exe") or is_process_running("AssettoCorsa.exe"):
+        eprint("[!] Feche o Assetto Corsa antes de abrir no modo padrão.")
+        return 1
+    launcher = ac.ac_root / "AssettoCorsa.exe"
+    backup = ac.ac_root / "AssettoCorsa_original.exe"
+    if backup.exists():
+        if not launcher.exists() or launcher.stat().st_size != backup.stat().st_size:
+            shutil.copy2(backup, launcher)
+            print("[✓] Launcher original restaurado (modo padrão).")
+        else:
+            print("[i] Launcher original já está no lugar.")
+    elif launcher.exists():
+        print("[i] AssettoCorsa_original.exe não existe; usando o launcher atual.")
+    else:
+        eprint("[x] AssettoCorsa.exe não encontrado.")
+        return 1
+    race = prefix_documents(ac) / "cfg" / "race.ini"
+    if race.exists():
+        text = race.read_text(encoding="utf-8", errors="replace")
+        race.write_text(_set_ini_section(text, "REMOTE", {"ACTIVE": "0"}), encoding="utf-8")
+        print("[i] race.ini marcado como offline (REMOTE ACTIVE=0).")
+    launch_ac(ac)
+    print("[i] No launcher, use Options → Controls para associar o controle.")
+    return 0
+
+
 def launch_ac(ac: AcInstall | None = None) -> None:
     """Pede ao Steam para iniciar o app 244210 (o launcher direto já está no lugar)."""
     ac = ac or detect_ac()
@@ -389,7 +672,7 @@ def launch_ac(ac: AcInstall | None = None) -> None:
     print("[i] Pedindo ao Steam para iniciar o Assetto Corsa…")
 
 def join_server(server: dict, car_id: str, password: str = "", launch: bool = True,
-                assume_yes: bool = False) -> int:
+                assume_yes: bool = False, install_missing: bool = False) -> int:
     ac = detect_ac()
     if not ac:
         eprint("[x] AC não encontrado.")
@@ -418,6 +701,43 @@ def join_server(server: dict, car_id: str, password: str = "", launch: bool = Tr
         car_id = status["installed_cars"][0] if status["installed_cars"] else ""
     if not car_id:
         eprint("[x] Nenhum carro instalado para este servidor.")
+        return 1
+    details = server.get("_details")
+    if details is None:
+        details = fetch_server_details(server)
+        if details is not None:
+            server["_details"] = details
+    has_entry = bool(
+        isinstance(details, dict)
+        and isinstance(details.get("players"), dict)
+        and details["players"].get("Cars")
+    )
+    missing = (
+        missing_entry_cars(details, local) if has_entry
+        else list(status.get("missing_cars") or [])
+    )
+    if missing:
+        eprint(f"[x] O servidor carrega {len(missing)} carro(s) que você não tem:")
+        for model in missing[:25]:
+            eprint(f"    {model}")
+        if len(missing) > 25:
+            eprint(f"    ... +{len(missing) - 25}")
+        if install_missing:
+            if install_server_cars(server, missing, assume_yes) != 0:
+                return 1
+        else:
+            eprint("[i] Use --install-missing para baixar do próprio servidor ou instale manualmente.")
+            return 1
+    slot_ok, slots = check_car_slot(server, car_id, details)
+    if slot_ok is False:
+        free = sorted(slots.get("free", {}).items(), key=lambda item: (-item[1], item[0]))
+        eprint(f"[x] Sem vaga para {car_id} neste servidor "
+               f"({slots.get('clients')}/{slots.get('maxclients')} jogadores).")
+        eprint("[i] O servidor usa entry list: cada modelo tem um número fixo de vagas.")
+        if free:
+            eprint("    vagas livres agora: " + ", ".join(f"{model} x{count}" for model, count in free))
+        else:
+            eprint("    nenhuma vaga livre no momento.")
         return 1
     if not confirm(f"Entrar em {server.get('name')} com {car_id}?", assume_yes):
         return 0

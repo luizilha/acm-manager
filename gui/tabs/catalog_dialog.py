@@ -24,6 +24,10 @@ class MissingModsDialog(QDialog):
         self.server = server
         self.status = status
         self._catalog: list[dict] | None = None
+        self._nohesi_index: list[dict] = []
+        self._nohesi_missing: list[dict] = []
+        self._nohesi_position: dict[str, int] = {}
+        self._server_links: list[dict] = []
         self.matches: list[dict] = []
         self.setWindowTitle(i18n.tr("Buscar mods faltando"))
         self.resize(760, 560)
@@ -32,6 +36,8 @@ class MissingModsDialog(QDialog):
     def _build(self):
         server = self.server
         status = self.status
+        self._load_nohesi()
+        self._load_server_links()
         parts = [f"<h3>{html.escape(server['name'])}</h3>"]
         base = status.get("track_base") or ""
         layout = status.get("track_layout") or ""
@@ -77,16 +83,53 @@ class MissingModsDialog(QDialog):
             parts.append(
                 i18n.tr("<p style='color:#98a0ad'>Só contam carros cujo ID de pasta em <code>content/cars</code> é exatamente o ID pedido pelo servidor. Variantes com outro prefixo ou sufixo (ex.: <code>_sprint</code>) continuam aparecendo como faltando.</p>")
             )
+            if self._nohesi_missing:
+                parts.append(
+                    i18n.tr("<p style='color:#98a0ad'>Carros No Hesi instalam direto do CDN ao clicar; use o botão abaixo para instalar todos.</p>")
+                )
             parts.append(i18n.tr("<p><b>Carros faltando ({n}):</b></p><ul>", n=len(status["missing_cars"])))
             for car in status["missing_cars"][:40]:
-                url = acm.mod_search_url("car", car)
-                parts.append(f"<li><a href='{html.escape(url)}'>{html.escape(car)}</a></li>")
+                position = self._nohesi_position.get(car.lower())
+                if position is not None:
+                    item = self._nohesi_missing[position]
+                    parts.append(
+                        f"<li><a href='acm-car:{position}'>{html.escape(car)}</a>"
+                        f" <span style='color:#98a0ad'>({acm.human(item['size'])})</span></li>"
+                    )
+                else:
+                    url = acm.mod_search_url("car", car)
+                    parts.append(f"<li><a href='{html.escape(url)}'>{html.escape(car)}</a></li>")
             parts.append("</ul>")
         if not (status["missing_track"] or status["missing_cars"] or not status["csp_ok"]):
             parts.append(i18n.tr("<p>Você tem todo o conteúdo necessário para este servidor.</p>"))
+        parts.append(i18n.tr("<p><b>Onde baixar (indicado pelo servidor):</b></p>"))
+        if self._server_links:
+            parts.append("<ul>")
+            for index, link in enumerate(self._server_links):
+                auto, host = acm.catalog_url_support(link["url"])
+                label = html.escape(link["label"])
+                if auto:
+                    parts.append(
+                        f"<li><a href='acm-link:{index}'>{label}</a> — "
+                        + i18n.tr("baixar e instalar")
+                        + f" <span style='color:#98a0ad'>({html.escape(host)})</span></li>"
+                    )
+                else:
+                    parts.append(
+                        f"<li><a href='{html.escape(link['url'])}'>{label}</a>"
+                        f" <span style='color:#98a0ad'>({html.escape(host)})</span></li>"
+                    )
+            parts.append("</ul>")
+        else:
+            parts.append(i18n.tr("<p style='color:#98a0ad'>O servidor não informou links de download.</p>"))
+        parts.append(
+            f"<p><a href='{html.escape(acm.server_mod_search_url(server))}'>"
+            + i18n.tr("Buscar o servidor no Google")
+            + "</a></p>"
+        )
         parts.append(
             "<p style='color:#98a0ad'>"
-            + i18n.tr("Links de Google Drive, MediaFire e arquivos diretos são baixados e instalados ao clicar. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) e Ko-fi abrem no navegador para você baixar manualmente. O catálogo cobre pistas; carros continuam no Google.")
+            + i18n.tr("Links de Google Drive, MediaFire e arquivos diretos são baixados e instalados ao clicar. Sharemods (Cloudflare), Mega, Patreon, RaceDepartment/Overtake (login) e Ko-fi abrem no navegador para você baixar manualmente. O catálogo cobre pistas; carros No Hesi vêm do CDN e os demais usam o Google.")
             + "</p><p style='color:#6f7683'>"
             + i18n.tr("Fonte do catálogo:")
             + f" <a href='{html.escape(acm.CATALOG_PAGE)}'>AC Tracks Listing by Breathe</a>.</p>"
@@ -106,6 +149,15 @@ class MissingModsDialog(QDialog):
         close.clicked.connect(self.accept)
         buttons.addWidget(refresh)
         buttons.addStretch(1)
+        if self._nohesi_missing:
+            total = sum(int(item.get("size") or 0) for item in self._nohesi_missing)
+            self.btn_nohesi_all = QPushButton(i18n.tr(
+                "Instalar todos os No Hesi ({n} · {size})",
+                n=len(self._nohesi_missing), size=acm.human(total),
+            ))
+            self.btn_nohesi_all.setObjectName("Primary")
+            self.btn_nohesi_all.clicked.connect(self._install_all_nohesi)
+            buttons.addWidget(self.btn_nohesi_all)
         buttons.addWidget(close)
         layout.addLayout(buttons)
 
@@ -178,6 +230,22 @@ class MissingModsDialog(QDialog):
             self.accept()
             self._install_catalog_entry(entry)
             return
+        if url.scheme() == "acm-car":
+            raw = url.path().lstrip("/") or url.host()
+            try:
+                item = self._nohesi_missing[int(raw)]
+            except (ValueError, IndexError):
+                return
+            self._install_nohesi_item(item)
+            return
+        if url.scheme() == "acm-link":
+            raw = url.path().lstrip("/") or url.host()
+            try:
+                link = self._server_links[int(raw)]
+            except (ValueError, IndexError):
+                return
+            self._install_server_link(link)
+            return
         QDesktopServices.openUrl(url)
 
     def _install_catalog_entry(self, entry: dict):
@@ -210,3 +278,97 @@ class MissingModsDialog(QDialog):
 
         self.host.mark_installed_stale()
         self.host.run_task(i18n.tr("Baixar e instalar do catálogo"), do_install)
+
+    def _load_server_links(self):
+        details = self.server.get("_details")
+        if details is None:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                details = acm.fetch_server_details(self.server, timeout=4)
+            except Exception as e:
+                details = None
+                self.host.append_log(f"[!] Detalhes do servidor indisponíveis: {e}")
+            finally:
+                QApplication.restoreOverrideCursor()
+            if details is not None:
+                self.server["_details"] = details
+        self._server_links = acm.server_download_links(self.server, details)
+
+    def _install_server_link(self, link: dict):
+        auto, host = acm.catalog_url_support(link["url"])
+        if not auto:
+            QDesktopServices.openUrl(QUrl(link["url"]))
+            return
+        answer = QMessageBox.question(
+            self, i18n.tr("Baixar e instalar"),
+            i18n.tr(
+                "Baixar e instalar este link indicado pelo servidor?\n\n{label}\n{url}\n\nFonte: {host}",
+                label=link["label"], url=link["url"], host=host,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        url = link["url"]
+        self.accept()
+        self.host.mark_installed_stale()
+        self.host.append_log(i18n.tr("Baixando do link do servidor: {url}", url=url))
+        self.host.run_task(
+            i18n.tr("Baixar e instalar do servidor"),
+            lambda: acm.install_mod(url, False, False, False, False, True),
+        )
+
+    def _load_nohesi(self):
+        if not self.status.get("missing_cars"):
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            self._nohesi_index = acm.fetch_nohesi_car_index()
+        except Exception as e:
+            self._nohesi_index = []
+            self.host.append_log(f"[!] CDN No Hesi indisponível: {e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+        by_model = {item["model"].lower(): item for item in self._nohesi_index}
+        for car in self.status["missing_cars"]:
+            item = by_model.get(str(car).lower())
+            if item is not None:
+                self._nohesi_position[str(car).lower()] = len(self._nohesi_missing)
+                self._nohesi_missing.append(item)
+
+    def _install_nohesi_item(self, item: dict):
+        name = item["model"]
+        self.accept()
+        self.host.mark_installed_stale()
+        self.host.append_log(i18n.tr("Instalando {car} do CDN No Hesi…", car=name))
+        self.host.run_task(
+            i18n.tr("Instalar {car}", car=name),
+            lambda: acm.install_nohesi_cars([name], True, self._nohesi_index),
+        )
+
+    def _install_all_nohesi(self):
+        items = list(self._nohesi_missing)
+        if not items:
+            return
+        total = sum(int(item.get("size") or 0) for item in items)
+        answer = QMessageBox.question(
+            self, i18n.tr("Instalar carros No Hesi"),
+            i18n.tr(
+                "Baixar e instalar {n} carro(s) No Hesi deste servidor?\n\nTotal: {size}.",
+                n=len(items), size=acm.human(total),
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        models = [item["model"] for item in items]
+        index = self._nohesi_index
+        self.accept()
+        self.host.mark_installed_stale()
+        self.host.append_log(i18n.tr("Instalando {n} carro(s) do CDN No Hesi…", n=len(models)))
+        self.host.run_task(
+            i18n.tr("Instalar carros No Hesi"),
+            lambda: acm.install_nohesi_cars(models, True, index),
+        )
