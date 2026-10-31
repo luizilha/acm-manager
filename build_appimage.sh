@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 APP=acm-manager
-VERSION=1.1
+VERSION=1.1.1
 ARCH=x86_64
 OUT="${APP}-${VERSION}-${ARCH}.AppImage"
 

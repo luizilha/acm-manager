@@ -65,6 +65,121 @@ def local_content(ac: AcInstall) -> dict:
         "csp_build": _csp_build(ac),
     }
 
+def _first_file(*paths: Path) -> Path | None:
+    for path in paths:
+        try:
+            if path.is_file():
+                return path
+        except OSError:
+            continue
+    return None
+
+
+def default_car_skin(car_dir: Path, skin: str | None = None) -> str | None:
+    """Skin usada no race.ini (a primeira pasta de skin, salvo escolha explícita)."""
+    skins = Path(car_dir) / "skins"
+    if not skins.is_dir():
+        return None
+    if skin:
+        wanted = str(skin).lower()
+        match = next(
+            (p for p in skins.iterdir() if p.is_dir() and p.name.lower() == wanted),
+            None,
+        )
+        if match is not None:
+            return match.name
+    first = next((p for p in skins.iterdir() if p.is_dir()), None)
+    return first.name if first is not None else None
+
+
+def car_preview_path(car_dir: Path, skin: str | None = None) -> Path | None:
+    """Imagem de showroom do carro (preview.jpg), com fallbacks."""
+    car_dir = Path(car_dir)
+    skins = car_dir / "skins"
+    candidates: list[Path] = []
+    chosen = default_car_skin(car_dir, skin)
+    if chosen:
+        folder = skins / chosen
+        candidates += [
+            folder / "preview.jpg",
+            folder / "preview_original.jpg",
+            folder / "preview.png",
+        ]
+    if skins.is_dir():
+        for pattern in ("*/preview.jpg", "*/preview.png", "*/preview_original.jpg"):
+            candidates += sorted(skins.glob(pattern))
+    ui = car_dir / "ui"
+    candidates += [ui / "preview.png", ui / "preview.jpg", car_dir / "logo.png"]
+    return _first_file(*candidates)
+
+
+def car_metadata(car_dir: Path) -> dict:
+    """Nome, marca, classe e specs de ``ui/ui_car.json``."""
+    car_dir = Path(car_dir)
+    data: dict = {}
+    ui = car_dir / "ui" / "ui_car.json"
+    if ui.is_file():
+        text = ""
+        try:
+            text = ui.read_text(encoding="utf-8-sig", errors="replace")
+            # Kunos ui_car.json costuma ter quebras de linha literais na descrição.
+            loaded = json.loads(text, strict=False)
+            if isinstance(loaded, dict):
+                data = loaded
+        except Exception:
+            data = {}
+            for key in ("name", "brand", "class", "year", "author"):
+                match = re.search(rf'"{key}"\s*:\s*"([^"]*)"', text)
+                if match:
+                    data[key] = match.group(1)
+    specs = data.get("specs")
+    return {
+        "id": car_dir.name,
+        "name": str(data.get("name") or car_dir.name),
+        "brand": str(data.get("brand") or ""),
+        "class": str(data.get("class") or ""),
+        "year": str(data.get("year") or ""),
+        "author": str(data.get("author") or ""),
+        "specs": specs if isinstance(specs, dict) else {},
+    }
+
+
+def content_preview_path(kind: str, path: Path) -> Path | None:
+    """Preview para um item da aba Instalados."""
+    path = Path(path)
+    if kind == "car":
+        return car_preview_path(path)
+    if kind == "track":
+        direct = _first_file(
+            path / "ui" / "preview.png",
+            path / "ui" / "preview.jpg",
+            path / "map.png",
+            path / "ui" / "logo.png",
+        )
+        if direct is not None:
+            return direct
+        if path.is_dir():
+            for child in sorted(path.iterdir()):
+                if child.is_dir() and (child / "map.png").is_file():
+                    return child / "map.png"
+        return None
+    if kind == "track-layout":
+        return _first_file(
+            path / "map.png",
+            path.parent / "ui" / "preview.png",
+            path.parent / "ui" / "preview.jpg",
+            path.parent / "map.png",
+        )
+    if path.is_dir():
+        return _first_file(
+            path / "logo.png",
+            path / "icon.png",
+            path / "preview.png",
+            path / "preview.jpg",
+        )
+    return None
+
+
 def _dir_sizes(paths: list[Path]) -> dict[str, int]:
     if not paths:
         return {}

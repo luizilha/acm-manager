@@ -1,7 +1,7 @@
 # AC Manager — Assetto Corsa on Linux
 
 [![Build AppImage](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml/badge.svg)](https://github.com/luizilha/acm-manager/actions/workflows/build-appimage.yml)
-[**Download the latest AppImage**](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1-x86_64.AppImage)
+[**Download the latest AppImage**](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1.1-x86_64.AppImage)
 
 A desktop manager for **Assetto Corsa on Linux**, built to replace the parts of
 Content Manager that Linux users actually need: environment setup, mod
@@ -35,12 +35,12 @@ content management.
 ## Download and run
 
 1. Download the AppImage:
-   [latest release](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1-x86_64.AppImage)
+   [latest release](https://github.com/luizilha/acm-manager/releases/latest/download/acm-manager-1.1.1-x86_64.AppImage)
 2. Make it executable and run:
 
 ```bash
-chmod +x acm-manager-1.1-x86_64.AppImage
-./acm-manager-1.1-x86_64.AppImage
+chmod +x acm-manager-1.1.1-x86_64.AppImage
+./acm-manager-1.1.1-x86_64.AppImage
 ```
 
 The AppImage is built automatically by GitHub Actions on every push to `main`
@@ -50,7 +50,7 @@ the downloadable binaries.
 If FUSE is unavailable:
 
 ```bash
-APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1.1-x86_64.AppImage
 ```
 
 Requirements, per-distro packages, Proton/CSP details, and troubleshooting are
@@ -107,7 +107,9 @@ Open **Servers**:
 - when the server advertises download links (in its details or name — Discord,
   Google Drive, MediaFire, direct files), the same dialog lists them under
   **Where to download** and offers **Download and install** for supported hosts;
-- click **Join** to choose an allowed installed car and enter the server.
+- click **Join** to choose an allowed installed car and enter the server; the
+  picker shows the car's showroom preview, brand/class and specs from
+  `ui_car.json`.
 - if the chosen car has no free slot on that instance, the app warns before
   launching and offers another instance of the same track with a free slot, or
   another installed car that has one;
@@ -123,6 +125,8 @@ or entry-list restrictions, and writes the server's CSP features to `race.ini`.
 Open **Installed**:
 
 - third-party items are shown by default;
+- selecting an item shows its preview (car showroom image or track map),
+  metadata and path in the right panel;
 - enable **Show official (base/DLC)** to include Kunos content;
 - select one or more items and use **Delete selected**;
 - deletion moves content to `~/.local/share/acm/trash`, not permanent removal.
@@ -159,7 +163,7 @@ Build the AppImage:
 
 The script installs build dependencies into `.venv` from
 `requirements-build.txt`, runs PyInstaller, and creates
-`acm-manager-1.1-x86_64.AppImage`.
+`acm-manager-1.1.1-x86_64.AppImage`.
 
 ## Architecture
 

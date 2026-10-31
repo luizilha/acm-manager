@@ -30,7 +30,7 @@ from typing import Iterable
 
 from .base import *
 
-from .content import local_content, check_server_mods, _resolve_server_track
+from .content import local_content, check_server_mods, _resolve_server_track, default_car_skin
 
 
 def steam_id(steam: SteamInstall | None = None) -> str:
@@ -540,11 +540,7 @@ def write_remote_ini(server: dict, car_id: str, password: str, ac: AcInstall | N
             None,
         )
         if car_dir is not None:
-            skins = car_dir / "skins"
-            if skins.is_dir():
-                skin_dir = next((p for p in skins.iterdir() if p.is_dir()), None)
-                if skin_dir is not None:
-                    skin_id = skin_dir.name
+            skin_id = default_car_skin(car_dir) or ""
     values = {
         "ACTIVE": "1",
         "SERVER_IP": str(server.get("ip") or ""),

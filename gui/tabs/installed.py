@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QHBoxLayout, QHeaderView, QLabel,
+    QAbstractItemView, QCheckBox, QFrame, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 import acm
 from gui import i18n
+from gui.common import preview_pixmap
 
 
 class InstalledWorker(QThread):
@@ -78,7 +81,12 @@ class InstalledTab(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.installed_table.itemSelectionChanged.connect(self._selection_changed)
-        layout.addWidget(self.installed_table, 1)
+
+        body = QHBoxLayout()
+        body.setSpacing(12)
+        body.addWidget(self.installed_table, 1)
+        body.addWidget(self._build_preview_panel())
+        layout.addLayout(body, 1)
 
         note = QLabel(i18n.tr(
             "Excluir move o item para ~/.local/share/acm/trash (não apaga de vez). "
@@ -87,6 +95,35 @@ class InstalledTab(QWidget):
         note.setObjectName("DropHint")
         note.setWordWrap(True)
         layout.addWidget(note)
+
+    def _build_preview_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("Card")
+        panel.setMinimumWidth(300)
+        panel.setMaximumWidth(340)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(8, 8, 8, 8)
+        panel_layout.setSpacing(5)
+
+        self.preview = QLabel(i18n.tr("Selecione um item"))
+        self.preview.setObjectName("Preview")
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.setFixedSize(300, 130)
+        panel_layout.addWidget(self.preview)
+
+        self.preview_title = QLabel("—")
+        self.preview_title.setWordWrap(True)
+        self.preview_title.setMaximumHeight(42)
+        self.preview_title.setStyleSheet("font-size:15px;font-weight:700;")
+        panel_layout.addWidget(self.preview_title)
+
+        self.preview_meta = QLabel("")
+        self.preview_meta.setObjectName("DropHint")
+        self.preview_meta.setWordWrap(True)
+        self.preview_meta.setMaximumHeight(36)
+        panel_layout.addWidget(self.preview_meta)
+        panel_layout.addStretch(1)
+        return panel
 
     def on_activated(self):
         if (not self._installed or self._stale) and not (
@@ -165,7 +202,59 @@ class InstalledTab(QWidget):
         self._selection_changed()
 
     def _selection_changed(self):
-        self.installed_delete.setEnabled(bool(self.installed_table.selectedItems()))
+        rows = sorted({item.row() for item in self.installed_table.selectedItems()})
+        self.installed_delete.setEnabled(bool(rows))
+        if len(rows) != 1:
+            self._show_preview(None, len(rows))
+            return
+        cell = self.installed_table.item(rows[0], 1)
+        item = cell.data(Qt.ItemDataRole.UserRole) if cell else None
+        self._show_preview(item, 1)
+
+    def _show_preview(self, item: dict | None, count: int):
+        if not item:
+            self.preview.clear()
+            self.preview.setToolTip("")
+            self.preview.setText(
+                i18n.tr("{n} itens selecionados", n=count)
+                if count > 1 else i18n.tr("Selecione um item")
+            )
+            self.preview_title.setText("—")
+            self.preview_title.setToolTip("")
+            self.preview_meta.setText("")
+            return
+        path = Path(item["path"])
+        image = acm.content_preview_path(item["kind"], path)
+        pixmap = preview_pixmap(image, 300, 130)
+        if pixmap is not None and not pixmap.isNull():
+            self.preview.setPixmap(pixmap)
+            self.preview.setText("")
+        else:
+            self.preview.clear()
+            self.preview.setText(i18n.tr("Sem preview"))
+        self.preview.setToolTip(item["path"])
+
+        title = item["name"]
+        meta = [f"{i18n.tr(item['kind'])} · {acm.human(item['size'])}"]
+        specs_tip = ""
+        if item["kind"] == "car":
+            info = acm.car_metadata(path)
+            title = info["name"] or title
+            extra = [
+                value for value in (info.get("brand"), info.get("class"), info.get("year"))
+                if value
+            ]
+            if extra:
+                meta.append(" · ".join(extra))
+            specs = info.get("specs") or {}
+            specs_tip = " · ".join(
+                str(specs[key]) for key in ("bhp", "weight", "topspeed", "pwratio")
+                if specs.get(key)
+            )
+        self.preview_title.setText(title)
+        self.preview_title.setToolTip(item["path"])
+        self.preview_meta.setText("\n".join(meta))
+        self.preview_meta.setToolTip(specs_tip)
 
     def delete_selected(self):
         rows = sorted({item.row() for item in self.installed_table.selectedItems()})

@@ -2,14 +2,62 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import QSize, Qt, QUrl, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QImageReader, QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 import acm
 from gui import i18n
+
+_PREVIEW_CACHE: "OrderedDict[tuple, QPixmap]" = OrderedDict()
+_PREVIEW_CACHE_MAX = 32
+
+
+def preview_pixmap(path, width: int, height: int) -> QPixmap | None:
+    """Carrega e escala um preview, com cache pequeno em memória."""
+    if not path:
+        return None
+    try:
+        source = Path(path)
+        stat = source.stat()
+    except OSError:
+        return None
+    key = (str(source), stat.st_mtime_ns, int(width), int(height))
+    cached = _PREVIEW_CACHE.get(key)
+    if cached is not None:
+        _PREVIEW_CACHE.move_to_end(key)
+        return cached
+    reader = QImageReader(str(source))
+    reader.setAutoTransform(True)
+    source_size = reader.size()
+    if source_size.isValid() and (
+        source_size.width() > width or source_size.height() > height
+    ):
+        reader.setScaledSize(
+            source_size.scaled(
+                QSize(int(width), int(height)),
+                Qt.AspectRatioMode.KeepAspectRatio,
+            )
+        )
+    image = reader.read()
+    if image.isNull():
+        return None
+    pixmap = QPixmap.fromImage(image)
+    if not source_size.isValid() and (
+        pixmap.width() > width or pixmap.height() > height
+    ):
+        pixmap = pixmap.scaled(
+            int(width), int(height),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    _PREVIEW_CACHE[key] = pixmap
+    while len(_PREVIEW_CACHE) > _PREVIEW_CACHE_MAX:
+        _PREVIEW_CACHE.popitem(last=False)
+    return pixmap
 
 
 def card(title: str) -> tuple[QFrame, QLabel]:

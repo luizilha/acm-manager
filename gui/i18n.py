@@ -200,6 +200,13 @@ _EN: dict[str, str] = {
     "Você não tem a pista deste servidor:": "You do not have this server's track:",
     "Escolher carro": "Choose car",
     "Carros instalados neste servidor:": "Cars installed for this server:",
+    "Filtrar por nome ou ID…": "Filter by name or ID…",
+    "Selecione um carro": "Select a car",
+    "Selecione um item": "Select an item",
+    "Sem preview": "No preview",
+    "ID: {car}": "ID: {car}",
+    "Cancelar": "Cancel",
+    "{n} itens selecionados": "{n} items selected",
     "Senha do servidor": "Server password",
     "Servidor cheio": "Server full",
     "O servidor está cheio. Tentar entrar mesmo assim?":

@@ -56,14 +56,14 @@ Flatpak `com.github.Matoking.protontricks` when Steam itself is Flatpak.
 ## 3. Running the AppImage
 
 ```bash
-chmod +x acm-manager-1.1-x86_64.AppImage
-./acm-manager-1.1-x86_64.AppImage
+chmod +x acm-manager-1.1.1-x86_64.AppImage
+./acm-manager-1.1.1-x86_64.AppImage
 ```
 
 If FUSE is missing:
 
 ```bash
-APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 ./acm-manager-1.1.1-x86_64.AppImage
 ```
 
 The AppImage is built on Ubuntu 22.04 by GitHub Actions for broader glibc
@@ -183,6 +183,11 @@ Recognized content:
 
 A failed install exits non-zero. If every item already exists, the app reports
 that nothing was installed instead of printing “Done”.
+
+Car previews come from the content itself: `content/cars/<car>/skins/<skin>/
+preview.jpg` for the join car picker and the Installed tab, and
+`content/tracks/<track>/ui/preview.*` or `<layout>/map.png` for tracks. The
+picker also reads `ui_car.json` for name, brand, class, year and specs.
 
 ### No Hesi car CDN
 

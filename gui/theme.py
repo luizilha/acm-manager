@@ -47,6 +47,13 @@ QFrame#DropZone[drag="true"] {
 }
 QLabel#DropTitle { font-size: 18px; font-weight: 600; color: #e8ebf1; }
 QLabel#DropHint { color: #98a0ad; font-size: 12px; }
+QLabel#Preview {
+    background: #0b0d11;
+    border: 1px solid #242936;
+    border-radius: 10px;
+    color: #6f7683;
+    font-size: 12px;
+}
 QPlainTextEdit {
     background: #0b0d11;
     border: 1px solid #242936;
@@ -110,6 +117,16 @@ QHeaderView::section {
     font-weight: 600;
 }
 QTableWidget::item { padding: 4px; }
+QListWidget {
+    background: #0f1218;
+    border: 1px solid #242936;
+    border-radius: 10px;
+    color: #eef1f6;
+    outline: 0;
+}
+QListWidget::item { padding: 6px 8px; }
+QListWidget::item:hover { background: #171a21; }
+QListWidget::item:selected { background: #2a1518; color: #ffffff; }
 QTableWidget::indicator {
     width: 14px;
     height: 14px;

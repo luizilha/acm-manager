@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 import acm
 from gui import i18n
+from gui.tabs.car_picker import pick_car
 from gui.tabs.catalog_dialog import MissingModsDialog
 
 SERVER_DISPLAY_LIMIT = 500
@@ -416,12 +417,8 @@ class ServersTab(QWidget):
         elif len(installed) == 1:
             car = installed[0]
         else:
-            car, ok = QInputDialog.getItem(
-                self, i18n.tr("Escolher carro"),
-                i18n.tr("Carros instalados neste servidor:"),
-                installed, 0, False,
-            )
-            if not ok or not car:
+            car = pick_car(self, installed)
+            if not car:
                 return
         slot_ok, slots = acm.check_car_slot(server, car, server.get("_details"))
         if slot_ok is False:
@@ -533,12 +530,8 @@ class ServersTab(QWidget):
                 return None
             return alt_servers[labels.index(choice)]["server"], car
         if clicked is btn_car:
-            choice, ok = QInputDialog.getItem(
-                self, i18n.tr("Outro carro"),
-                i18n.tr("Escolha um carro instalado com vaga:"),
-                alt_cars, 0, False,
-            )
-            if not ok or not choice:
+            choice = pick_car(self, alt_cars)
+            if not choice:
                 return None
             return server, choice
         return None

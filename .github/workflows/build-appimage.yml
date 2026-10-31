@@ -44,15 +44,15 @@ jobs:
 
       - name: Verify artifact
         run: |
-          test -f acm-manager-1.1-x86_64.AppImage
-          file acm-manager-1.1-x86_64.AppImage
-          ls -lh acm-manager-1.1-x86_64.AppImage
+          test -f acm-manager-1.1.1-x86_64.AppImage
+          file acm-manager-1.1.1-x86_64.AppImage
+          ls -lh acm-manager-1.1.1-x86_64.AppImage
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: acm-manager-appimage
-          path: acm-manager-1.1-x86_64.AppImage
+          path: acm-manager-1.1.1-x86_64.AppImage
           if-no-files-found: error
           retention-days: 30
 
@@ -76,7 +76,7 @@ jobs:
               --notes "Automated AppImage build from commit ${{ github.sha }}."
           fi
 
-          gh release upload "$tag" acm-manager-1.1-x86_64.AppImage --clobber
+          gh release upload "$tag" acm-manager-1.1.1-x86_64.AppImage --clobber
           gh release edit "$tag" \
             --title "$title" \
             --notes "Automated AppImage build from commit ${{ github.sha }}." \

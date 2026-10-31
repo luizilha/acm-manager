@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1 — 2026-10-31
+
+### Added
+
+- **Car previews** when choosing a car to join a server: the picker now shows the
+  car's showroom preview (`skins/<skin>/preview.jpg`), brand/class/year and
+  specs from `ui_car.json`, with a placeholder for cars without a preview.
+- **Preview panel in the Installed tab**: selecting a car shows its showroom
+  image and specs; tracks/layouts show their preview or map, plus size and path.
+
+### Fixed
+
+- When the chosen car has no free slot, **"Escolher outro carro"** now opens the
+  same car-picker modal (with previews and specs) listing only the installed
+  cars that still have a free slot on that server.
+
 ## 1.1 — 2026-10-30
 
 ### Added
